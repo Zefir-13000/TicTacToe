@@ -11,5 +11,14 @@ endif()
 
 project ("TicTacToe")
 
+file(GLOB ENGINE_SOURCES "${CMAKE_SOURCE_DIR}/Engine/source/*.cpp")
+add_library(EngineLib STATIC ${ENGINE_SOURCES})
+target_include_directories(EngineLib PUBLIC ${CMAKE_SOURCE_DIR}/Engine/include)
+target_link_libraries(EngineLib d2d1.lib dwrite.lib d3d11.lib dxgi.lib)
+
+if (CMAKE_VERSION VERSION_GREATER 3.12)
+  set_property(TARGET EngineLib PROPERTY CXX_STANDARD 20)
+endif()
+
 add_subdirectory ("Game/source")
 add_subdirectory ("Editor/source")

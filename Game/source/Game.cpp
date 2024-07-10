@@ -38,6 +38,8 @@ bool Game::Initialize() {
 void Game::Shutdown() {
 	if (text1)
 		delete text1;
+	if (m_pBlackBrush)
+		m_pBlackBrush->Release();
 	if (m_pEngine) {
 		delete m_pEngine;
 	}
