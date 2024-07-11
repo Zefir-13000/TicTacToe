@@ -12,7 +12,7 @@ public:
 	Object() = default;
 	~Object() = default;
 
-	virtual void Render(ID2D1HwndRenderTarget* pD2DRenderTarget) = 0;
+	virtual void Render(ID2D1RenderTarget* pD2DRenderTarget) = 0;
 
 	POINT GetPosition() { return m_objPos; }
 	void SetPosition(POINT pos) { m_objPos = pos; };

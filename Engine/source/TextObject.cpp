@@ -49,7 +49,7 @@ void TextObject::SetSize(UINT width, UINT height) {
     m_renderSize = D2D1::SizeU(width, height);
 }
 
-void TextObject::Render(ID2D1HwndRenderTarget* pD2DRenderTarget) {
+void TextObject::Render(ID2D1RenderTarget* pD2DRenderTarget) {
     pD2DRenderTarget->DrawText(
         m_text.c_str(),
         wcslen(m_text.c_str()),

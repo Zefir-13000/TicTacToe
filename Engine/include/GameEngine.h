@@ -11,7 +11,7 @@ public:
 
 	IDWriteFactory* GetDWriteFactory() { return m_pDWriteFactory; };
 	ID2D1Factory* GetD2DFactory() { return m_pD2DFactory; };
-	ID2D1HwndRenderTarget* GetRenderTarget() { return m_pD2DRenderTarget; }
+	ID2D1RenderTarget* GetRenderTarget() { return m_pD2DRenderTarget; }
 	IDXGISwapChain* GetSwapChainD3D() { return m_pSwapChain; }
 
 	void BeginRender();
@@ -20,8 +20,8 @@ public:
 
 	void Render(Object* object);
 
-	bool Initialize(HWND hWnd);
-	bool InitializeImgui(HWND hWnd, UINT windowWidth, UINT windowHeight);
+	bool Initialize(HWND hWnd, UINT windowWidth, UINT windowHeight);
+	bool InitializeImgui(HWND hWnd);
 
 	bool GetOccluded() { return m_SwapChainOccluded; };
 
@@ -35,7 +35,8 @@ private:
 
 	ID2D1Factory* m_pD2DFactory = nullptr;
 	IDWriteFactory* m_pDWriteFactory = nullptr;
-	ID2D1HwndRenderTarget* m_pD2DRenderTarget = nullptr;
+	ID2D1RenderTarget* m_pD2DRenderTarget = nullptr;
+	IDXGISurface1* m_pRenderDXT;
 
 	ID3D11Device* m_pD3DDevice = nullptr;
 	ID3D11DeviceContext* m_pD3DDeviceContext = nullptr;
@@ -43,4 +44,5 @@ private:
 	ID3D11RenderTargetView* m_pD3DRenderTargetView = nullptr;
 
 	bool m_SwapChainOccluded = false;
+	bool m_bInitedImgui = false;
 };

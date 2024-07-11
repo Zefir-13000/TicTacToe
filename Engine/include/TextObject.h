@@ -6,7 +6,7 @@ public:
 	TextObject(IDWriteFactory* pDWriteFactory, float fontSize);
 	~TextObject();
 
-	void Render(ID2D1HwndRenderTarget* pD2DRenderTarget) override;
+	void Render(ID2D1RenderTarget* pD2DRenderTarget) override;
 
 	void SetText(std::string text);
 	void SetBrush(ID2D1SolidColorBrush* pBrush);

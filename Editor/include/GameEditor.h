@@ -15,6 +15,11 @@ public:
 
 	void SetResize(UINT width, UINT height);
 private:
+	bool InitializeViewport(UINT width, UINT height);
+
 	HWND m_hWnd;
 	GameEngine* m_pEngine = nullptr;
+
+	ID3D11Texture2D* m_viewportTexture;
+	ID3D11ShaderResourceView* m_viewportTextureView;
 };

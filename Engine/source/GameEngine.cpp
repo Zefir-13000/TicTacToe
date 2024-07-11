@@ -26,7 +26,7 @@ GameEngine::~GameEngine() {
     }
 }
 
-bool GameEngine::Initialize(HWND hWnd) {
+bool GameEngine::Initialize(HWND hWnd, UINT windowWidth, UINT windowHeight) {
 	HRESULT hr;
 
     m_hWnd = hWnd;
@@ -49,22 +49,33 @@ bool GameEngine::Initialize(HWND hWnd) {
         return false;
     }
 
+    if (!CreateDeviceD3D(hWnd, windowWidth, windowHeight)) {
+        OutputDebugString("Failed to create DeviceD3D.\n");
+        return false;
+    }
+
     RECT rect;
     GetClientRect(m_hWnd, &rect);
 
-    hr = m_pD2DFactory->CreateHwndRenderTarget(D2D1::RenderTargetProperties(), D2D1::HwndRenderTargetProperties(m_hWnd, D2D1::SizeU(rect.right, rect.bottom)), &m_pD2DRenderTarget);
-    if (FAILED(hr)) {
-        OutputDebugString("Failed to create HwndRenderTarget.\n");
+    hr = m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderDXT));
+    if (FAILED(hr))
+    {
+        OutputDebugString("Failed to get buffer RenderDXT.\n");
+        return false;
+    }
+
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0);
+    hr = m_pD2DFactory->CreateDxgiSurfaceRenderTarget(m_pRenderDXT, &props, &m_pD2DRenderTarget);
+    if (FAILED(hr))
+    {
+        OutputDebugString("Failed to create Dxgi Surface.\n");
         return false;
     }
 
 	return true;
 }
 
-bool GameEngine::InitializeImgui(HWND hWnd, UINT windowWidth, UINT windowHeight) {
-    if (!CreateDeviceD3D(hWnd, windowWidth, windowHeight)) {
-        return false;
-    }
+bool GameEngine::InitializeImgui(HWND hWnd) {
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -80,6 +91,7 @@ bool GameEngine::InitializeImgui(HWND hWnd, UINT windowWidth, UINT windowHeight)
     ImGui_ImplWin32_Init(hWnd);
     ImGui_ImplDX11_Init(m_pD3DDevice, m_pD3DDeviceContext);
 
+    m_bInitedImgui = true;
     return true;
 }
 
@@ -88,22 +100,23 @@ void GameEngine::Tick() {
 }
 
 void GameEngine::BeginRender() {
-    m_pD2DRenderTarget->BeginDraw();
     if (m_pD3DDevice) {
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
+
+        const float clear_color[4] = { 0.45f, 0.55f, 0.60f, 1.00f };
+
+        m_pD3DDeviceContext->OMSetRenderTargets(1, &m_pD3DRenderTargetView, nullptr);
+        m_pD3DDeviceContext->ClearRenderTargetView(m_pD3DRenderTargetView, clear_color);
     }
+    m_pD2DRenderTarget->BeginDraw();
 }
 
 void GameEngine::EndRender() {
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
     m_pD2DRenderTarget->EndDraw();
     if (m_pD3DDevice) {
         ImGui::Render();
-        m_pD3DDeviceContext->OMSetRenderTargets(1, &m_pD3DRenderTargetView, nullptr);
-        m_pD3DDeviceContext->ClearRenderTargetView(m_pD3DRenderTargetView, clear_color_with_alpha);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
         ImGuiIO& io = ImGui::GetIO();
@@ -113,7 +126,6 @@ void GameEngine::EndRender() {
             ImGui::UpdatePlatformWindows();
             ImGui::RenderPlatformWindowsDefault();
         }
-
 
         // Present
         HRESULT hr = m_pSwapChain->Present(1, 0);   // Present with vsync
@@ -221,7 +233,7 @@ bool GameEngine::CreateDeviceD3D(HWND hWnd, UINT windowWidth, UINT windowHeight)
     sd.Windowed = TRUE;
     sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
-    UINT createDeviceFlags = 0;
+    UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef _DEBUG
     createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif // _DEBUG
@@ -246,10 +258,30 @@ void GameEngine::CreateRenderTargetD3D() {
 }
 
 void GameEngine::SetResize(UINT width, UINT height) {
+    HRESULT hr;
+
+    m_pD2DRenderTarget->Release();
+    m_pRenderDXT->Release();
+
     if (m_pD3DRenderTargetView) {
         m_pD3DRenderTargetView->Release();
         m_pD3DRenderTargetView = nullptr;
     }
     m_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
     GameEngine::CreateRenderTargetD3D();
+
+    hr = m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderDXT));
+    if (FAILED(hr))
+    {
+        OutputDebugString("Failed to get buffer RenderDXT.\n");
+        return;
+    }
+
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0);
+    hr = m_pD2DFactory->CreateDxgiSurfaceRenderTarget(m_pRenderDXT, &props, &m_pD2DRenderTarget);
+    if (FAILED(hr))
+    {
+        OutputDebugString("Failed to create Dxgi Surface.\n");
+        return;
+    }
 }
