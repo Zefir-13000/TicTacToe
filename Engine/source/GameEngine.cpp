@@ -5,13 +5,17 @@ GameEngine::GameEngine() {
 }
 
 GameEngine::~GameEngine() {
+    // Clear 2D
     if (m_pD2DRenderTarget)
         m_pD2DRenderTarget->Release();
+    if (m_pRenderDXT)
+        m_pRenderDXT->Release();
     if (m_pDWriteFactory)
         m_pDWriteFactory->Release();
     if (m_pD2DFactory)
         m_pD2DFactory->Release();
 
+    // Clear 3D
     if (m_pD3DRenderTargetView)
         m_pD3DRenderTargetView->Release();
     if (m_pSwapChain)
@@ -26,13 +30,31 @@ GameEngine::~GameEngine() {
     }
 }
 
+bool GameEngine::InitializeDXGISurface1(IDXGISurface1* pRenderDXT) {
+    HRESULT hr;
+    if (m_pD2DRenderTarget)
+        m_pD2DRenderTarget->Release();
+    if (m_pRenderDXT)
+        m_pRenderDXT->Release();
+
+    m_pRenderDXT = pRenderDXT;
+
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0);
+    hr = m_pD2DFactory->CreateDxgiSurfaceRenderTarget(m_pRenderDXT, &props, &m_pD2DRenderTarget);
+    if (FAILED(hr))
+    {
+        OutputDebugString("Failed to create Dxgi Surface.\n");
+        return false;
+    }
+    return true;
+}
+
 bool GameEngine::Initialize(HWND hWnd, UINT windowWidth, UINT windowHeight) {
 	HRESULT hr;
 
     m_hWnd = hWnd;
 
     auto options = D2D1_FACTORY_OPTIONS();
-
 #ifdef _DEBUG
     options.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
 #endif // _DEBUG
@@ -54,23 +76,16 @@ bool GameEngine::Initialize(HWND hWnd, UINT windowWidth, UINT windowHeight) {
         return false;
     }
 
-    RECT rect;
-    GetClientRect(m_hWnd, &rect);
+    //RECT rect;
+    //GetClientRect(m_hWnd, &rect);
 
-    hr = m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderDXT));
+    // Init 2D on main window
+    /*hr = m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderDXT));
     if (FAILED(hr))
     {
         OutputDebugString("Failed to get buffer RenderDXT.\n");
         return false;
-    }
-
-    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0);
-    hr = m_pD2DFactory->CreateDxgiSurfaceRenderTarget(m_pRenderDXT, &props, &m_pD2DRenderTarget);
-    if (FAILED(hr))
-    {
-        OutputDebugString("Failed to create Dxgi Surface.\n");
-        return false;
-    }
+    }*/
 
 	return true;
 }
@@ -91,6 +106,17 @@ bool GameEngine::InitializeImgui(HWND hWnd) {
     ImGui_ImplWin32_Init(hWnd);
     ImGui_ImplDX11_Init(m_pD3DDevice, m_pD3DDeviceContext);
 
+    io.Fonts->AddFontDefault();
+    float baseFontSize = 13.0f; // 13.0f is the size of the default font. Change to the font size you use.
+    float iconFontSize = baseFontSize * 2.0f / 3.0f;
+
+    static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_16_FA, 0 };
+    ImFontConfig icons_config;
+    icons_config.MergeMode = true;
+    icons_config.PixelSnapH = true;
+    icons_config.GlyphMinAdvanceX = iconFontSize;
+    io.Fonts->AddFontFromFileTTF("data/fonts/" FONT_ICON_FILE_NAME_FAS, iconFontSize, &icons_config, icons_ranges);
+
     m_bInitedImgui = true;
     return true;
 }
@@ -99,7 +125,11 @@ void GameEngine::Tick() {
 
 }
 
-void GameEngine::BeginRender() {
+void GameEngine::BeginRender2D() {
+    m_pD2DRenderTarget->BeginDraw();
+}
+
+void GameEngine::BeginRender3D() {
     if (m_pD3DDevice) {
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -110,11 +140,16 @@ void GameEngine::BeginRender() {
         m_pD3DDeviceContext->OMSetRenderTargets(1, &m_pD3DRenderTargetView, nullptr);
         m_pD3DDeviceContext->ClearRenderTargetView(m_pD3DRenderTargetView, clear_color);
     }
-    m_pD2DRenderTarget->BeginDraw();
+    else {
+        OutputDebugString("D3DDevice is not initialized to begin draw!\n");
+    }
 }
 
-void GameEngine::EndRender() {
+void GameEngine::EndRender2D() {
     m_pD2DRenderTarget->EndDraw();
+}
+
+void GameEngine::EndRender3D() {
     if (m_pD3DDevice) {
         ImGui::Render();
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -131,6 +166,9 @@ void GameEngine::EndRender() {
         HRESULT hr = m_pSwapChain->Present(1, 0);   // Present with vsync
         //HRESULT hr = g_pSwapChain->Present(0, 0); // Present without vsync
         m_SwapChainOccluded = (hr == DXGI_STATUS_OCCLUDED);
+    }
+    else {
+        OutputDebugString("D3DDevice is not initialized to end draw!\n");
     }
 }
 
@@ -231,7 +269,7 @@ bool GameEngine::CreateDeviceD3D(HWND hWnd, UINT windowWidth, UINT windowHeight)
     sd.SampleDesc.Count = 1;
     sd.SampleDesc.Quality = 0;
     sd.Windowed = TRUE;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 
     UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef _DEBUG
@@ -257,11 +295,8 @@ void GameEngine::CreateRenderTargetD3D() {
     pBackBuffer->Release();
 }
 
-void GameEngine::SetResize(UINT width, UINT height) {
+void GameEngine::SetResizeSwapchain3D(UINT width, UINT height) {
     HRESULT hr;
-
-    m_pD2DRenderTarget->Release();
-    m_pRenderDXT->Release();
 
     if (m_pD3DRenderTargetView) {
         m_pD3DRenderTargetView->Release();
@@ -269,19 +304,4 @@ void GameEngine::SetResize(UINT width, UINT height) {
     }
     m_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
     GameEngine::CreateRenderTargetD3D();
-
-    hr = m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderDXT));
-    if (FAILED(hr))
-    {
-        OutputDebugString("Failed to get buffer RenderDXT.\n");
-        return;
-    }
-
-    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0);
-    hr = m_pD2DFactory->CreateDxgiSurfaceRenderTarget(m_pRenderDXT, &props, &m_pD2DRenderTarget);
-    if (FAILED(hr))
-    {
-        OutputDebugString("Failed to create Dxgi Surface.\n");
-        return;
-    }
 }

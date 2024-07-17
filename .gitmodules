@@ -1,0 +1,3 @@
+[submodule "submodules/IconFontCppHeaders"]
+	path = submodules/IconFontCppHeaders
+	url = https://github.com/juliettef/IconFontCppHeaders

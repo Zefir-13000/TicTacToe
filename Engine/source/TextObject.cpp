@@ -1,9 +1,12 @@
 #include <TextObject.h>
 
 TextObject::TextObject(IDWriteFactory* pDWriteFactory, float fontSize) {
-	m_ObjType = Object_TextType;
+    m_pDWriteFactory = pDWriteFactory;
 
-    UpdateFormat(pDWriteFactory, fontSize);
+	m_ObjType = Object_TextType;
+    m_name = "TextObject";
+
+    UpdateFormat(fontSize);
 }
 
 TextObject::~TextObject() {
@@ -11,12 +14,12 @@ TextObject::~TextObject() {
         pTextFormat->Release();
 }
 
-void TextObject::UpdateFormat(IDWriteFactory* pDWriteFactory, float fontSize) {
+void TextObject::UpdateFormat(float fontSize) {
     if (pTextFormat)
         pTextFormat->Release();
 
     HRESULT hr;
-    hr = pDWriteFactory->CreateTextFormat(
+    hr = m_pDWriteFactory->CreateTextFormat(
         L"Arial",
         NULL,
         DWRITE_FONT_WEIGHT_REGULAR,
@@ -30,6 +33,7 @@ void TextObject::UpdateFormat(IDWriteFactory* pDWriteFactory, float fontSize) {
         OutputDebugString("TextObject: Failed to create text format.\n");
         return;
     }
+    pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
 }
 
 void TextObject::SetText(std::string text) {
@@ -41,20 +45,19 @@ void TextObject::SetBrush(ID2D1SolidColorBrush* pBrush) {
     m_pBrush = pBrush;
 }
 
-void TextObject::SetSize(D2D1_SIZE_U size) {
-    m_renderSize = size;
-}
-
-void TextObject::SetSize(UINT width, UINT height) {
-    m_renderSize = D2D1::SizeU(width, height);
-}
-
 void TextObject::Render(ID2D1RenderTarget* pD2DRenderTarget) {
+    if (m_rotation != 0) {
+        Vector2f middle_pos = GetDrawRectMiddle();
+        pD2DRenderTarget->SetTransform(D2D1::Matrix3x2F::Rotation(m_rotation, D2D1::Point2F(middle_pos.x, middle_pos.y)));
+    }
+    //pD2DRenderTarget->DrawTextLayout();
     pD2DRenderTarget->DrawText(
         m_text.c_str(),
         wcslen(m_text.c_str()),
         pTextFormat,
-        D2D1::RectF(m_objPos.x, m_objPos.y, m_objPos.x + m_renderSize.width, m_objPos.y + m_renderSize.height),
+        GetDrawRect(),
         m_pBrush
     );
+
+    pD2DRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 }
