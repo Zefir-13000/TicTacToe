@@ -6,7 +6,7 @@ TextObject::TextObject(IDWriteFactory* pDWriteFactory, float fontSize) {
 	m_ObjType = Object_TextType;
     m_name = "TextObject";
 
-    UpdateFormat(fontSize);
+    UpdateFormat(m_fontSize, m_fontWeight);
 }
 
 TextObject::~TextObject() {
@@ -14,7 +14,7 @@ TextObject::~TextObject() {
         pTextFormat->Release();
 }
 
-void TextObject::UpdateFormat(float fontSize) {
+void TextObject::UpdateFormat(float fontSize, DWRITE_FONT_WEIGHT fontWeight) {
     if (pTextFormat)
         pTextFormat->Release();
 
@@ -22,7 +22,7 @@ void TextObject::UpdateFormat(float fontSize) {
     hr = m_pDWriteFactory->CreateTextFormat(
         L"Arial",
         NULL,
-        DWRITE_FONT_WEIGHT_REGULAR,
+        fontWeight,
         DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL,
         fontSize,
@@ -33,7 +33,7 @@ void TextObject::UpdateFormat(float fontSize) {
         OutputDebugString("TextObject: Failed to create text format.\n");
         return;
     }
-    pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    pTextFormat->SetTextAlignment(m_textAlign);
 }
 
 void TextObject::SetText(std::string text) {
@@ -43,6 +43,33 @@ void TextObject::SetText(std::string text) {
 
 void TextObject::SetBrush(ID2D1SolidColorBrush* pBrush) {
     m_pBrush = pBrush;
+}
+
+float TextObject::GetFontSize() { 
+    return m_fontSize; 
+}
+
+void TextObject::SetFontSize(float fontSize) {
+    m_fontSize = fontSize;
+    UpdateFormat(m_fontSize, m_fontWeight);
+}
+
+DWRITE_FONT_WEIGHT TextObject::GetFontWeight() {
+    return pTextFormat->GetFontWeight(); 
+}
+
+void TextObject::SetFontWeight(DWRITE_FONT_WEIGHT fontWeight) {
+    m_fontWeight = fontWeight;
+    UpdateFormat(m_fontSize, m_fontWeight);
+}
+
+DWRITE_TEXT_ALIGNMENT TextObject::GetTextAlign() { 
+    return m_textAlign;
+}
+
+void TextObject::SetTextAlign(DWRITE_TEXT_ALIGNMENT textAlign) {
+    m_textAlign = textAlign;
+    pTextFormat->SetTextAlignment(m_textAlign);
 }
 
 void TextObject::Render(ID2D1RenderTarget* pD2DRenderTarget) {

@@ -239,6 +239,7 @@ void GameEditor::Render() {
 		}
 		ImGui::End();
 
+		// Viewport tab on the center
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -255,6 +256,7 @@ void GameEditor::Render() {
 		ImGui::Image((ImTextureID)m_viewportTextureShaderView, ImGui::GetContentRegionAvail());
 		ImGui::End();
 
+		// Hierarchy tab on the left
 		ImGui::Begin("Hierarchy");
 		if (ImGui::Button(ICON_FA_PLUS "Create")) {
 			ImGui::OpenPopup("CreateObjectPopup");
@@ -327,6 +329,7 @@ void GameEditor::Render() {
 		}
 		ImGui::End();
 
+		// Inspector tab on the right
 		ImGui::Begin("Inspector");
 		if (m_selectedObject) {
 			Vector2f pos = m_selectedObject->GetPosition();
@@ -370,10 +373,63 @@ void GameEditor::Render() {
 						fontSize = 1.0f;
 					textObj->SetFontSize(fontSize);
 				}
+
+				static const char* fontWeights[] = { "Light", "Regular", "Medium", "Bold", "Black" };
+				static int fontWeightsInt[] = { 300, 400, 500, 700, 900 };
+				static const int fontWeightCount = sizeof(fontWeights) / sizeof(fontWeights[0]);
+				int selectedFontWeight = 1;
+				float fontWeight = textObj->GetFontWeight();
+
+				for (int i = 0; i < fontWeightCount; ++i) {
+					if (fontWeightsInt[i] == fontWeight) {
+						selectedFontWeight = i;
+						break;
+					}
+				}
+
+				ImGui::Text("FontWeight:"); ImGui::SameLine();
+				if (ImGui::BeginCombo("##combo", fontWeights[selectedFontWeight])) {
+					for (int n = 0; n < fontWeightCount; n++) {
+						bool isSelected = (selectedFontWeight == n);
+						if (ImGui::Selectable(fontWeights[n], isSelected)) {
+							selectedFontWeight = n;
+							textObj->SetFontWeight((DWRITE_FONT_WEIGHT)fontWeightsInt[n]);
+						}
+						if (isSelected) {
+							ImGui::SetItemDefaultFocus();
+						}
+					}
+					ImGui::EndCombo();
+				}
+
+				std::string obj_text = textObj->GetText();
+				ImGui::Text("Text:"); ImGui::SameLine();
+				if (ImGui::InputTextMultiline("##TextInput", &obj_text)) {
+					textObj->SetText(obj_text);
+				}
+
+				DWRITE_TEXT_ALIGNMENT text_align = textObj->GetTextAlign();
+				ImGui::Text("Text Align:"); ImGui::SameLine();
+				ImGui::BeginGroup(); 
+				ImGui::SameLine();
+				if (ImGui::Button(ICON_FA_ARROW_LEFT, ImVec2(20, 20))) {
+					textObj->SetTextAlign(DWRITE_TEXT_ALIGNMENT_LEADING);
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("|", ImVec2(20, 20))) {
+					textObj->SetTextAlign(DWRITE_TEXT_ALIGNMENT_CENTER);
+				}
+				ImGui::SameLine();
+				if (ImGui::Button(ICON_FA_ARROW_RIGHT, ImVec2(20, 20))) {
+					textObj->SetTextAlign(DWRITE_TEXT_ALIGNMENT_TRAILING);
+				}
+
+				ImGui::EndGroup();
 			}
 		}
-		else
+		else {
 			ImGui::Text("Please, select object.");
+		}
 		ImGui::End();
 		
 		//bool show_demo_window = true;
