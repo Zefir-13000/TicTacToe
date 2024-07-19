@@ -25,6 +25,7 @@ private:
 
 	int m_selectedID = -1;
 	Object* m_selectedObject = nullptr;
+	bool m_bSelectedScene = false;
 
 	ImVec2 m_viewportSize;
 	ID3D11Texture2D* m_viewportTexture = nullptr;

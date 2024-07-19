@@ -17,20 +17,17 @@ public:
 	DWRITE_TEXT_ALIGNMENT GetTextAlign();
 	void SetTextAlign(DWRITE_TEXT_ALIGNMENT textAlign);
 
-	std::string GetText() { return std::string(m_text.begin(), m_text.end()); };
+	std::string GetText();
 	void SetText(std::string text);
-	void SetBrush(ID2D1SolidColorBrush* pBrush);
 
 	void UpdateFormat(float fontSize, DWRITE_FONT_WEIGHT fontWeight);
+	
+	virtual void Save(std::ofstream& stream);
+	virtual void Load(ID2D1RenderTarget* pD2DRenderTarget, std::ifstream& stream);
 private:
-	float m_fontSize = 32;
+	float m_fontSize = 32.f;
+	std::string m_text;
 	DWRITE_FONT_WEIGHT m_fontWeight = DWRITE_FONT_WEIGHT_NORMAL;
-
 	IDWriteTextFormat* pTextFormat = nullptr;
-	ID2D1SolidColorBrush* m_pBrush = nullptr;
-
-	std::wstring m_text = L"\0";
 	DWRITE_TEXT_ALIGNMENT m_textAlign = DWRITE_TEXT_ALIGNMENT_LEADING;
-
-	IDWriteFactory* m_pDWriteFactory = nullptr; // ref
 };

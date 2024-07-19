@@ -2,7 +2,7 @@
 #include <stdafx.h>
 
 enum ObjectType {
-	Object_NULL		= 0,
+	Object_None		= 0,
 	Object_TextType = 1,
 
 };
@@ -12,6 +12,8 @@ struct Vector2f {
 	Vector2f() : x(0), y(0) {}
 	float x;
 	float y;
+
+	const static Vector2f ZERO;
 };
 
 struct Vector2i {
@@ -19,11 +21,18 @@ struct Vector2i {
 	Vector2i() : x(0), y(0) {}
 	int x;
 	int y;
+
+	const static Vector2i ZERO;
 };
 
 class Object {
 public:
-	virtual ~Object() = default;
+	virtual ~Object() {
+		if (m_pBrush && !m_bIsBrushRef)
+			m_pBrush->Release();
+		m_pDWriteFactory = nullptr;
+		m_pBrush = nullptr;
+	}
 	virtual void Render(ID2D1RenderTarget* pD2DRenderTarget) = 0;
 
 	int GetID() { return id; }
@@ -38,22 +47,53 @@ public:
 	void SetPosition(Vector2f pos) { m_objPos = pos; }
 	void SetPosition(float x, float y) { m_objPos = {x, y}; }
 
-	D2D1_SIZE_U GetSize() { return m_renderSize; }
-	void SetSize(D2D1_SIZE_U size) { m_renderSize = size; }
-	void SetSize(UINT width, UINT height) { m_renderSize = D2D1::SizeU(width, height); }
+	Vector2i GetSize() { return m_renderSize; }
+	void SetSize(Vector2i size) { m_renderSize = size; }
+	void SetSize(UINT width, UINT height) { m_renderSize = Vector2i(width, height); }
 
-	D2D1_RECT_F GetDrawRect() { return D2D1::RectF(m_objPos.x, m_objPos.y, m_objPos.x + m_renderSize.width, m_objPos.y + m_renderSize.height); }
-	Vector2f GetDrawRectMiddle() { return Vector2f(m_objPos.x + m_renderSize.width / 2, m_objPos.y + m_renderSize.height / 2); }
+	float* GetColor() { return m_objColor; }
+	void SetColor(ID2D1RenderTarget* RenderTarget, D2D1::ColorF color) {
+		if (m_pBrush && !m_bIsBrushRef) {
+			m_pBrush->Release();
+		}
+
+		HRESULT hr;
+		hr = RenderTarget->CreateSolidColorBrush(color, &m_pBrush);
+		if (FAILED(hr)) {
+			OutputDebugString("Failed to create ColorBrush.\n");
+		}
+		m_bIsBrushRef = false;
+	}
+	void SetColor(ID2D1SolidColorBrush* pBrush) {
+		m_bIsBrushRef = true;
+		m_pBrush = pBrush;
+	}
+
+	D2D1_RECT_F GetDrawRect() { return D2D1::RectF(m_objPos.x, m_objPos.y, m_objPos.x + m_renderSize.x, m_objPos.y + m_renderSize.y); }
+	Vector2f GetDrawRectMiddle() { return Vector2f(m_objPos.x + m_renderSize.x / 2, m_objPos.y + m_renderSize.y / 2); }
 
 	ObjectType GetObjectType() { return m_ObjType; }
-protected:
-	Object() { static int _id = 0; id = _id++; }
 
-	ObjectType m_ObjType = Object_NULL;
-	Vector2f m_objPos = {0, 0};
+	virtual void Save(std::ofstream& stream);
+	virtual void Load(ID2D1RenderTarget* pD2DRenderTarget, std::ifstream& stream);
+protected:
+	Object(IDWriteFactory* pDWriteFactory) { 
+		m_pDWriteFactory = pDWriteFactory;
+
+		static int _id = 0; 
+		id = _id++; 
+	}
+
+	ObjectType m_ObjType = Object_None;
+	Vector2f m_objPos = Vector2f::ZERO;
+	Vector2i m_renderSize = Vector2i::ZERO;
 	float m_rotation = 0;
-	D2D1_SIZE_U m_renderSize;
+	float m_objColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	std::string m_name = "Object";
+
+	bool m_bIsBrushRef = false;
+	ID2D1SolidColorBrush* m_pBrush = nullptr;
+	IDWriteFactory* m_pDWriteFactory = nullptr; // ref
 private:
 	int id;
 };

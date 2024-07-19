@@ -135,7 +135,7 @@ void GameEngine::BeginRender3D() {
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-        const float clear_color[4] = { 0.45f, 0.55f, 0.60f, 1.00f };
+        const float clear_color[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 
         m_pD3DDeviceContext->OMSetRenderTargets(1, &m_pD3DRenderTargetView, nullptr);
         m_pD3DDeviceContext->ClearRenderTargetView(m_pD3DRenderTargetView, clear_color);
@@ -269,7 +269,7 @@ bool GameEngine::CreateDeviceD3D(HWND hWnd, UINT windowWidth, UINT windowHeight)
     sd.SampleDesc.Count = 1;
     sd.SampleDesc.Quality = 0;
     sd.Windowed = TRUE;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
 
     UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef _DEBUG

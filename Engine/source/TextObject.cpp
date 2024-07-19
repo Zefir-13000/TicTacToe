@@ -1,22 +1,30 @@
 #include <TextObject.h>
 
-TextObject::TextObject(IDWriteFactory* pDWriteFactory, float fontSize) {
-    m_pDWriteFactory = pDWriteFactory;
-
+TextObject::TextObject(IDWriteFactory* pDWriteFactory, float fontSize) : Object(pDWriteFactory) {
 	m_ObjType = Object_TextType;
     m_name = "TextObject";
+    m_text = "Text";
+    pTextFormat = nullptr;
 
     UpdateFormat(m_fontSize, m_fontWeight);
 }
 
 TextObject::~TextObject() {
-    if (pTextFormat)
+    if (pTextFormat) {
         pTextFormat->Release();
+        pTextFormat = nullptr;
+    }
 }
 
 void TextObject::UpdateFormat(float fontSize, DWRITE_FONT_WEIGHT fontWeight) {
-    if (pTextFormat)
+    if (!m_pDWriteFactory) {
+        OutputDebugString("TextObject: Failed to get m_pDWriteFactory.\n");
+        return;
+    }
+    if (pTextFormat) {
         pTextFormat->Release();
+        pTextFormat = nullptr;
+    }
 
     HRESULT hr;
     hr = m_pDWriteFactory->CreateTextFormat(
@@ -36,13 +44,12 @@ void TextObject::UpdateFormat(float fontSize, DWRITE_FONT_WEIGHT fontWeight) {
     pTextFormat->SetTextAlignment(m_textAlign);
 }
 
-void TextObject::SetText(std::string text) {
-    std::wstring wtext(text.begin(), text.end());
-    m_text = wtext;
+std::string TextObject::GetText() {
+    return m_text; 
 }
 
-void TextObject::SetBrush(ID2D1SolidColorBrush* pBrush) {
-    m_pBrush = pBrush;
+void TextObject::SetText(std::string text) {
+    m_text = text;
 }
 
 float TextObject::GetFontSize() { 
@@ -73,18 +80,61 @@ void TextObject::SetTextAlign(DWRITE_TEXT_ALIGNMENT textAlign) {
 }
 
 void TextObject::Render(ID2D1RenderTarget* pD2DRenderTarget) {
+    if (!pTextFormat) {
+        OutputDebugString("TextObject - pTextFormat was null\n");
+        return;
+    }
+    if (!m_pBrush) {
+        OutputDebugString("TextObject - m_pBrush was null\n");
+        return;
+    }
+
     if (m_rotation != 0) {
         Vector2f middle_pos = GetDrawRectMiddle();
         pD2DRenderTarget->SetTransform(D2D1::Matrix3x2F::Rotation(m_rotation, D2D1::Point2F(middle_pos.x, middle_pos.y)));
     }
-    //pD2DRenderTarget->DrawTextLayout();
+
+    std::wstring wtext(m_text.begin(), m_text.end());
     pD2DRenderTarget->DrawText(
-        m_text.c_str(),
-        wcslen(m_text.c_str()),
+        wtext.c_str(),
+        wcslen(wtext.c_str()),
         pTextFormat,
         GetDrawRect(),
         m_pBrush
     );
 
     pD2DRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
+}
+
+void TextObject::Save(std::ofstream& stream) {
+    Object::Save(stream);
+
+    stream.write((const char*)&m_fontSize, sizeof(float));
+    stream.write((const char*)&m_fontWeight, sizeof(int));
+    stream.write((const char*)&m_textAlign, sizeof(int));
+    
+    size_t text_size = m_text.size();
+    stream.write((const char*)&text_size, sizeof(size_t));
+    stream.write(&m_text[0], text_size);
+}
+
+void TextObject::Load(ID2D1RenderTarget* pD2DRenderTarget, std::ifstream& stream) {
+    Object::Load(pD2DRenderTarget, stream);
+
+    stream.read((char*)&m_fontSize, sizeof(float));
+
+    int fontWeightInt = 0;
+    stream.read((char*)&fontWeightInt, sizeof(int));
+    m_fontWeight = static_cast<DWRITE_FONT_WEIGHT>(fontWeightInt);
+
+    int textAlignInt = 0;
+    stream.read((char*)&textAlignInt, sizeof(int));
+    m_textAlign = static_cast<DWRITE_TEXT_ALIGNMENT>(textAlignInt);
+
+    size_t text_size = 0;
+    stream.read((char*)&text_size, sizeof(size_t));
+    m_text.resize(text_size);
+    stream.read(&m_text[0], text_size);
+   
+    UpdateFormat(m_fontSize, m_fontWeight);
 }

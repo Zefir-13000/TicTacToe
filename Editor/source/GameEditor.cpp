@@ -98,16 +98,21 @@ bool GameEditor::InitializeViewport(UINT width, UINT height) {
 }
 
 void GameEditor::RenderScene() {
-	const float clear_color[4] = { 1.0f, 0.5f, 1.0f, 1.00f };
-
+	float* clearColor = m_pScene->GetClearColor();
+	
 	m_pEngine->BeginRender2D();
-	m_pEngine->ClearRender(D2D1::ColorF(D2D1::ColorF::Blue));
+	m_pEngine->ClearRender(D2D1::ColorF(clearColor[0], clearColor[1], clearColor[2], clearColor[3]));
 
 	m_pScene->Render();
 
 	// Editor object helper
 	if (m_selectedObject) {
+		if (m_selectedObject->GetRotation() != 0) {
+			Vector2f middle_pos = m_selectedObject->GetDrawRectMiddle();
+			m_pEngine->GetRenderTarget()->SetTransform(D2D1::Matrix3x2F::Rotation(m_selectedObject->GetRotation(), D2D1::Point2F(middle_pos.x, middle_pos.y)));
+		}
 		m_pEngine->GetRenderTarget()->DrawRectangle(m_selectedObject->GetDrawRect(), m_pScene->GetBlackBrush());
+		m_pEngine->GetRenderTarget()->SetTransform(D2D1::Matrix3x2F::Identity());
 	}
 
 	m_pEngine->EndRender2D();
@@ -172,6 +177,25 @@ void GameEditor::Render() {
 
 		m_pEngine->SetOccluded(false);
 	}
+	// Check scene changed
+	{
+		SceneState sceneState = m_pScene->GetSceneState();
+		if (sceneState == Scene_Unititled) {
+			std::string formatText = "TicTacToe - Untitled*";
+			SetWindowText(m_hWnd, formatText.c_str());
+		}
+		else if (sceneState == Scene_Saved && m_pScene->GetIsChanged()) {
+			std::string formatText = "TicTacToe - ";
+			formatText += m_pScene->GetSceneName();
+			formatText += "*";
+			SetWindowText(m_hWnd, formatText.c_str());
+		}
+		else {
+			std::string formatText = "TicTacToe - ";
+			formatText += m_pScene->GetSceneName();
+			SetWindowText(m_hWnd, formatText.c_str());
+		}
+	}
 
 	// Render 2D Scenes
 	RenderScene();
@@ -197,17 +221,72 @@ void GameEditor::Render() {
 		// Menu bar
 		if (ImGui::BeginMainMenuBar()) {
 			if (ImGui::BeginMenu("File")) {
+				std::string filename;
 				if (ImGui::MenuItem(ICON_FA_PLUS " Create")) {
+					int res = m_pScene->HandleSaveNewScene(m_hWnd);
+					if (res == IDNO || res == IDYES) {
+						delete m_pScene;
+						m_pScene = new Scene(m_pEngine);
+						m_selectedID = -1;
+						m_selectedObject = nullptr;
+						m_bSelectedScene = false;
+					}
 				}
 				if (ImGui::MenuItem(ICON_FA_FOLDER " Open", "Ctrl+O")) {
+					m_pScene->HandleOpenNewScene(m_hWnd);
+					m_selectedID = -1;
+					m_selectedObject = nullptr;
+					m_bSelectedScene = false;
 				}
 				if (ImGui::MenuItem(ICON_FA_SAVE " Save", "Ctrl+S")) {
+					if (m_pScene->GetSceneState() == Scene_Unititled)
+						filename = m_pScene->ShowSaveDialog(m_hWnd);
+					else
+						filename = m_pScene->GetSceneSaveFilename();
+					// Save and Create new scene
+					if (filename.size() > 0) {
+						m_pScene->SetSceneSaveFilename(filename);
+						m_pScene->Save(filename);
+					}
 				}
 				if (ImGui::MenuItem(ICON_FA_SAVE " Save as..")) {
+					filename = m_pScene->ShowSaveDialog(m_hWnd);
+					// Save and Create new scene
+					if (filename.size() > 0) {
+						m_pScene->SetSceneSaveFilename(filename);
+						m_pScene->Save(filename);
+					}
 				}
 				ImGui::EndMenu();
 			}
 			ImGui::EndMainMenuBar();
+		}
+
+		// Check for shortcuts
+		if (ImGui::IsKeyDown(ImGui::GetKeyIndex(ImGuiKey_LeftCtrl), false) || ImGui::IsKeyDown(ImGui::GetKeyIndex(ImGuiKey_RightCtrl), false)) {
+			if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_O), false)) {
+				m_pScene->HandleOpenNewScene(m_hWnd);
+				m_selectedID = -1;
+				m_selectedObject = nullptr;
+				m_bSelectedScene = false;
+			}
+			if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_S), false)) {
+				std::string filename;
+				if (m_pScene->GetSceneState() == Scene_Unititled)
+					filename = m_pScene->ShowSaveDialog(m_hWnd);
+				else
+					filename = m_pScene->GetSceneSaveFilename();
+				// Save and Create new scene
+				if (filename.size() > 0) {
+					m_pScene->SetSceneSaveFilename(filename);
+					m_pScene->Save(filename);
+				}
+				else {
+					// Cancel creating new scene because of an error
+					MessageBox(m_hWnd, "Error: Save file", "Error", MB_ICONERROR | MB_OK);
+				}
+			}
+			ImGui::GetIO().KeyCtrl = false;
 		}
 
 		static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode;
@@ -261,7 +340,6 @@ void GameEditor::Render() {
 		if (ImGui::Button(ICON_FA_PLUS "Create")) {
 			ImGui::OpenPopup("CreateObjectPopup");
 		}
-		ImGui::SeparatorText("Scene:");
 
 		if (ImGui::BeginPopup("CreateObjectPopup")) {
 			// List of object types
@@ -274,82 +352,119 @@ void GameEditor::Render() {
 				if (ImGui::Selectable(objectTypes[i])) {
 					// Create object
 					m_pScene->CreateObjectByTypeName(objectTypes[i]);
+					m_pScene->SetChanged();
 					ImGui::CloseCurrentPopup();
 				}
 			}
 			ImGui::EndPopup();
 		}
 
-		std::vector<Object*> scene_objects = m_pScene->GetSceneObjects();
-		for (Object* obj : scene_objects) {
-			if (!obj)
-				continue;
-
-			ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf;
-			if (obj->GetID() == m_selectedID) {
-				flags |= ImGuiTreeNodeFlags_Selected;
+		ImGui::SeparatorText("");
+		ImGuiTreeNodeFlags scene_flags = ImGuiTreeNodeFlags_OpenOnDoubleClick;
+		if (ImGui::TreeNodeEx(m_pScene->GetSceneName().c_str(), scene_flags)) {
+			// Check scene object clicked
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+				m_selectedID = -1;
+				m_selectedObject = nullptr;
+				m_bSelectedScene = true;
 			}
 
-			bool treeOpen = ImGui::TreeNodeEx(obj->GetName().c_str(), flags);
-			if (ImGui::IsItemClicked(0)) {
-				m_selectedID = obj->GetID();
-				m_selectedObject = obj;
-			}
+			// Draw scene objects
+			std::vector<Object*> scene_objects = m_pScene->GetSceneObjects();
+			for (Object* obj : scene_objects) {
+				if (!obj)
+					continue;
 
-			char menupopupid[256];
-			sprintf_s(menupopupid, 256, "%s%d", "MenuObjectPopup", obj->GetID());
-			if (ImGui::IsItemClicked(1)) {
-				ImGui::OpenPopup(menupopupid);
-			}
-
-			if (ImGui::BeginPopup(menupopupid)) {
-				static const char* objectMenu[] = { "Delete" };
-				static const int objectMenuCount = sizeof(objectMenu) / sizeof(objectMenu[0]);
-
-				for (int i = 0; i < objectMenuCount; ++i) {
-					// If an object type is selected
-					if (ImGui::Selectable(objectMenu[i])) {
-						// Create object
-						if (objectMenu[i] == "Delete") {
-							if (m_selectedID == obj->GetID()) {
-								m_selectedID = -1;
-								m_selectedObject = nullptr;
-							}
-							m_pScene->RemoveObject(obj);
-						}
-						ImGui::CloseCurrentPopup();
+					ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf;
+					if (obj->GetID() == m_selectedID) {
+						flags |= ImGuiTreeNodeFlags_Selected;
 					}
+
+				bool treeOpen = ImGui::TreeNodeEx(obj->GetName().c_str(), flags);
+				if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+					m_selectedID = obj->GetID();
+					m_selectedObject = obj;
+					m_bSelectedScene = false;
 				}
 
-				ImGui::EndPopup();
+				char menupopupid[256];
+				sprintf_s(menupopupid, 256, "%s%d", "MenuObjectPopup", obj->GetID());
+				if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+					ImGui::OpenPopup(menupopupid);
+				}
+
+				if (ImGui::BeginPopup(menupopupid)) {
+					static const char* objectMenu[] = { "Delete" };
+					static const int objectMenuCount = sizeof(objectMenu) / sizeof(objectMenu[0]);
+
+					for (int i = 0; i < objectMenuCount; ++i) {
+						// If an object type is selected
+						if (ImGui::Selectable(objectMenu[i])) {
+							if (objectMenu[i] == "Delete") {
+								if (m_selectedID == obj->GetID()) {
+									m_selectedID = -1;
+									m_selectedObject = nullptr;
+								}
+								m_pScene->RemoveObject(obj);
+							}
+							ImGui::CloseCurrentPopup();
+						}
+					}
+
+					ImGui::EndPopup();
+				}
+
+				if (treeOpen)
+					ImGui::TreePop();
 			}
 
-			if (treeOpen)
-				ImGui::TreePop();
+			ImGui::TreePop();
 		}
 		ImGui::End();
 
 		// Inspector tab on the right
 		ImGui::Begin("Inspector");
-		if (m_selectedObject) {
+		if (m_bSelectedScene) {
+			std::string sceneName = m_pScene->GetSceneName();
+			ImGui::Text("Name:"); ImGui::SameLine();
+			if (ImGui::InputText("##SceneName", &sceneName, ImGuiInputTextFlags_EnterReturnsTrue)) {
+				if (sceneName.size() > 0) {
+					m_pScene->SetSceneName(sceneName);
+					m_pScene->SetChanged();
+				}
+			}
+
+			float* sceneClearColor = m_pScene->GetClearColor();
+			ImGui::Text("BgColor:"); ImGui::SameLine();
+			if (ImGui::ColorEdit4("##SceneColor", &sceneClearColor[0])) {
+				m_pScene->SetChanged();
+			}
+		}
+		else if (m_selectedObject) {
 			Vector2f pos = m_selectedObject->GetPosition();
-			D2D1_SIZE_U sizeU = m_selectedObject->GetSize();
-			Vector2i size = {(int)sizeU.width, (int)sizeU.height};
+			Vector2i size = m_selectedObject->GetSize();
 			float rotation = m_selectedObject->GetRotation();
-			char objName[1024];
-			strcpy(objName, m_selectedObject->GetName().c_str());
+			std::string objName = m_selectedObject->GetName();
 
 			ImGui::Text("Name:"); ImGui::SameLine();
-			if (ImGui::InputText("##ObjName", objName, 1024))
-				m_selectedObject->SetName(objName);
+			if (ImGui::InputText("##ObjName", &objName, ImGuiInputTextFlags_EnterReturnsTrue)) {
+				if (objName.size() > 0) {
+					m_selectedObject->SetName(objName);
+					m_pScene->SetChanged();
+				}
+			}
 
 			ImGui::Text("Pos:"); ImGui::SameLine();
-			if (ImGui::DragFloat2("##ObjPos", &pos.x))
+			if (ImGui::DragFloat2("##ObjPos", &pos.x)) {
 				m_selectedObject->SetPosition(pos);
+				m_pScene->SetChanged();
+			}
 
 			ImGui::Text("Rot:"); ImGui::SameLine();
-			if (ImGui::DragFloat("##ObjRot", &rotation))
+			if (ImGui::DragFloat("##ObjRot", &rotation)) {
 				m_selectedObject->SetRotation(rotation);
+				m_pScene->SetChanged();
+			}
 
 			ImGui::Text("Size:"); ImGui::SameLine();
 			if (ImGui::DragInt2("##ObjSize", &size.x, 1.0f, 0.01f, 100000.f)) {
@@ -359,19 +474,28 @@ void GameEditor::Render() {
 				if (size.y < 0) {
 					size.y = 0.01f;
 				}
-				sizeU.width = (UINT)size.x;
-				sizeU.height = (UINT)size.y;
-				m_selectedObject->SetSize(sizeU);
+				m_selectedObject->SetSize(size);
+				m_pScene->SetChanged();
+			}
+
+			float* ObjColor = m_selectedObject->GetColor();
+			ImGui::Text("Color:"); ImGui::SameLine();
+			if (ImGui::ColorEdit4("##ObjColor", &ObjColor[0])) {
+				m_pScene->SetChanged();
+
+				D2D1::ColorF color(ObjColor[0], ObjColor[1], ObjColor[2], ObjColor[3]);
+				m_selectedObject->SetColor(m_pEngine->GetRenderTarget(), color);
 			}
 
 			if (m_selectedObject->GetObjectType() == Object_TextType) {
 				TextObject* textObj = dynamic_cast<TextObject*>(m_selectedObject);
 				float fontSize = textObj->GetFontSize();
 				ImGui::Text("FontSize:"); ImGui::SameLine();
-				if (ImGui::DragFloat("##Font", &fontSize, 1.0f, 1.f, 1000.f)) {
+				if (ImGui::DragFloat("##ObjFont", &fontSize, 1.0f, 1.f, 1000.f)) {
 					if (fontSize < 1.0f)
 						fontSize = 1.0f;
 					textObj->SetFontSize(fontSize);
+					m_pScene->SetChanged();
 				}
 
 				static const char* fontWeights[] = { "Light", "Regular", "Medium", "Bold", "Black" };
@@ -388,12 +512,13 @@ void GameEditor::Render() {
 				}
 
 				ImGui::Text("FontWeight:"); ImGui::SameLine();
-				if (ImGui::BeginCombo("##combo", fontWeights[selectedFontWeight])) {
+				if (ImGui::BeginCombo("##ObjFontCombo", fontWeights[selectedFontWeight])) {
 					for (int n = 0; n < fontWeightCount; n++) {
 						bool isSelected = (selectedFontWeight == n);
 						if (ImGui::Selectable(fontWeights[n], isSelected)) {
 							selectedFontWeight = n;
 							textObj->SetFontWeight((DWRITE_FONT_WEIGHT)fontWeightsInt[n]);
+							m_pScene->SetChanged();
 						}
 						if (isSelected) {
 							ImGui::SetItemDefaultFocus();
@@ -404,8 +529,9 @@ void GameEditor::Render() {
 
 				std::string obj_text = textObj->GetText();
 				ImGui::Text("Text:"); ImGui::SameLine();
-				if (ImGui::InputTextMultiline("##TextInput", &obj_text)) {
+				if (ImGui::InputTextMultiline("##ObjTextInput", &obj_text)) {
 					textObj->SetText(obj_text);
+					m_pScene->SetChanged();
 				}
 
 				DWRITE_TEXT_ALIGNMENT text_align = textObj->GetTextAlign();
@@ -414,14 +540,17 @@ void GameEditor::Render() {
 				ImGui::SameLine();
 				if (ImGui::Button(ICON_FA_ARROW_LEFT, ImVec2(20, 20))) {
 					textObj->SetTextAlign(DWRITE_TEXT_ALIGNMENT_LEADING);
+					m_pScene->SetChanged();
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("|", ImVec2(20, 20))) {
 					textObj->SetTextAlign(DWRITE_TEXT_ALIGNMENT_CENTER);
+					m_pScene->SetChanged();
 				}
 				ImGui::SameLine();
 				if (ImGui::Button(ICON_FA_ARROW_RIGHT, ImVec2(20, 20))) {
 					textObj->SetTextAlign(DWRITE_TEXT_ALIGNMENT_TRAILING);
+					m_pScene->SetChanged();
 				}
 
 				ImGui::EndGroup();
