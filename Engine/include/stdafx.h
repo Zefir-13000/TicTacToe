@@ -1,5 +1,7 @@
 #include <iostream>
 #include <fstream>
+#include <functional>
+#include <unordered_map>
 #include <Windows.h>
 
 #include <d2d1.h>

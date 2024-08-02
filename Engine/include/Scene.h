@@ -19,10 +19,19 @@ public:
 	void RemoveObject(Object* object);
 	void RemoveObject(int objectID);
 
+	EngineAction* FindActionById(int id);
+	EngineAction* FindAction(std::string name);
+	void AddAction(EngineAction* action);
+	void RemoveAction(EngineAction* action);
+
+	EngineAction* CreateAction();
 	Object* CreateObject(ObjectType objType);
 	Object* CreateObjectByTypeName(std::string typeName);
 
 	void Render();
+
+	void EventOnClick();
+	void EventMouseMove();
 
 	std::string GetSceneName() { return m_name; }
 	void SetSceneName(std::string name) { m_name = name; }
@@ -41,9 +50,13 @@ public:
 	ID2D1SolidColorBrush* GetBlackBrush() { return m_pBlackBrush; }
 
 	const std::vector<Object*>& GetSceneObjects() const { return m_objects; }
+	const std::vector<EngineAction*>& GetSceneActions() const { return m_actions; }
+
+	void SetupActionCallback(std::string name, std::function<void()> callback);
+	std::function<void()> FindActionCallback(EngineAction* action);
 
 	void Save(std::string& filename);
-	void Load(std::string& filename);
+	bool Load(std::string& filename);
 
 	std::string ShowSaveDialog(HWND hWnd);
 	std::string ShowOpenDialog(HWND hWnd);
@@ -52,6 +65,9 @@ public:
 	void HandleOpenNewScene(HWND hWnd);
 private:
 	std::vector<Object*> m_objects;
+	std::vector<EngineAction*> m_actions;
+	std::unordered_map<std::string, std::function<void()>> m_actionMap;
+
 	ID2D1SolidColorBrush* m_pBlackBrush = nullptr;
 
 	bool m_bIsChanged = false;
@@ -63,3 +79,6 @@ private:
 
 	GameEngine* m_pEngine; // ref
 };
+
+extern Scene* g_pScene;
+extern Scene* GetScene();

@@ -1,4 +1,5 @@
 ﻿#include <GameEditor.h>
+#include <AllObjectTypes.h>
 
 GameEditor::GameEditor(HWND hWnd) {
 	m_hWnd = hWnd;
@@ -97,6 +98,10 @@ bool GameEditor::InitializeViewport(UINT width, UINT height) {
 	return true;
 }
 
+void GameEditor::TriggerEvent(EngineEvent event) {
+	m_pEngine->TriggerEvent(event);
+}
+
 void GameEditor::RenderScene() {
 	float* clearColor = m_pScene->GetClearColor();
 	
@@ -109,10 +114,10 @@ void GameEditor::RenderScene() {
 	if (m_selectedObject) {
 		if (m_selectedObject->GetRotation() != 0) {
 			Vector2f middle_pos = m_selectedObject->GetDrawRectMiddle();
-			m_pEngine->GetRenderTarget()->SetTransform(D2D1::Matrix3x2F::Rotation(m_selectedObject->GetRotation(), D2D1::Point2F(middle_pos.x, middle_pos.y)));
+			GetRenderTarget()->SetTransform(D2D1::Matrix3x2F::Rotation(m_selectedObject->GetRotation(), D2D1::Point2F(middle_pos.x, middle_pos.y)));
 		}
-		m_pEngine->GetRenderTarget()->DrawRectangle(m_selectedObject->GetDrawRect(), m_pScene->GetBlackBrush());
-		m_pEngine->GetRenderTarget()->SetTransform(D2D1::Matrix3x2F::Identity());
+		GetRenderTarget()->DrawRectangle(m_selectedObject->GetDrawRect(), m_pScene->GetBlackBrush());
+		GetRenderTarget()->SetTransform(D2D1::Matrix3x2F::Identity());
 	}
 
 	m_pEngine->EndRender2D();
@@ -197,7 +202,7 @@ void GameEditor::Render() {
 		}
 	}
 
-	// Render 2D Scenes
+	// Render 2D Scene
 	RenderScene();
 
 	m_pEngine->BeginRender3D();
@@ -227,16 +232,12 @@ void GameEditor::Render() {
 					if (res == IDNO || res == IDYES) {
 						delete m_pScene;
 						m_pScene = new Scene(m_pEngine);
-						m_selectedID = -1;
-						m_selectedObject = nullptr;
-						m_bSelectedScene = false;
+						Unselect();
 					}
 				}
 				if (ImGui::MenuItem(ICON_FA_FOLDER " Open", "Ctrl+O")) {
 					m_pScene->HandleOpenNewScene(m_hWnd);
-					m_selectedID = -1;
-					m_selectedObject = nullptr;
-					m_bSelectedScene = false;
+					Unselect();
 				}
 				if (ImGui::MenuItem(ICON_FA_SAVE " Save", "Ctrl+S")) {
 					if (m_pScene->GetSceneState() == Scene_Unititled)
@@ -266,9 +267,7 @@ void GameEditor::Render() {
 		if (ImGui::IsKeyDown(ImGui::GetKeyIndex(ImGuiKey_LeftCtrl), false) || ImGui::IsKeyDown(ImGui::GetKeyIndex(ImGuiKey_RightCtrl), false)) {
 			if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_O), false)) {
 				m_pScene->HandleOpenNewScene(m_hWnd);
-				m_selectedID = -1;
-				m_selectedObject = nullptr;
-				m_bSelectedScene = false;
+				Unselect();
 			}
 			if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_S), false)) {
 				std::string filename;
@@ -329,10 +328,10 @@ void GameEditor::Render() {
 		float height = ImGui::GetContentRegionAvail().y;
 
 		if (width != m_viewportSize.x || height != m_viewportSize.y) {
-			InitializeViewport(width, height);
+			//InitializeViewport(width, height);
 		}
 
-		ImGui::Image((ImTextureID)m_viewportTextureShaderView, ImGui::GetContentRegionAvail());
+		ImGui::Image((ImTextureID)m_viewportTextureShaderView, m_viewportSize);
 		ImGui::End();
 
 		// Hierarchy tab on the left
@@ -343,15 +342,22 @@ void GameEditor::Render() {
 
 		if (ImGui::BeginPopup("CreateObjectPopup")) {
 			// List of object types
-			static const char* objectTypes[] = { "TextObject" };
+			static const char* objectTypes[] = { "Action", "TextObject", "ButtonObject"};
 			static const int objectCount = sizeof(objectTypes) / sizeof(objectTypes[0]);
 
 			// Iterate over object types
 			for (int i = 0; i < objectCount; ++i) {
 				// If an object type is selected
 				if (ImGui::Selectable(objectTypes[i])) {
-					// Create object
-					m_pScene->CreateObjectByTypeName(objectTypes[i]);
+					// Check action
+					if (strcmp(objectTypes[i], "Action") == 0) {
+						// Create action
+						m_pScene->CreateAction();
+					}
+					else {
+						// Create object
+						m_pScene->CreateObjectByTypeName(objectTypes[i]);
+					}
 					m_pScene->SetChanged();
 					ImGui::CloseCurrentPopup();
 				}
@@ -364,9 +370,7 @@ void GameEditor::Render() {
 		if (ImGui::TreeNodeEx(m_pScene->GetSceneName().c_str(), scene_flags)) {
 			// Check scene object clicked
 			if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-				m_selectedID = -1;
-				m_selectedObject = nullptr;
-				m_bSelectedScene = true;
+				SelectScene();
 			}
 
 			// Draw scene objects
@@ -375,16 +379,42 @@ void GameEditor::Render() {
 				if (!obj)
 					continue;
 
-					ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf;
-					if (obj->GetID() == m_selectedID) {
-						flags |= ImGuiTreeNodeFlags_Selected;
+				ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf;
+				if (m_selectedObject && obj->GetID() == m_selectedID) {
+					flags |= ImGuiTreeNodeFlags_Selected;
+				}
+
+				bool treeOpen;
+				if (obj->GetObjectType() == Object_ButtonType) {
+					flags |= ImGuiTreeNodeFlags_OpenOnDoubleClick;
+					flags &= ~ImGuiTreeNodeFlags_Leaf;
+					treeOpen = ImGui::TreeNodeEx(obj->GetName().c_str(), flags);
+					if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+						SelectObject(obj);
 					}
 
-				bool treeOpen = ImGui::TreeNodeEx(obj->GetName().c_str(), flags);
-				if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-					m_selectedID = obj->GetID();
-					m_selectedObject = obj;
-					m_bSelectedScene = false;
+					if (treeOpen) {
+						flags = ImGuiTreeNodeFlags_Leaf;
+						
+						TextObject* text_obj = static_cast<ButtonObject*>(obj)->GetTextObject();
+						if (m_selectedObject && text_obj->GetID() == m_selectedID) {
+							flags |= ImGuiTreeNodeFlags_Selected;
+						}
+						bool treeOpenText = ImGui::TreeNodeEx(text_obj->GetName().c_str(), flags);
+
+						if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+							SelectObject(text_obj);
+						}
+
+						if (treeOpenText)
+							ImGui::TreePop();
+					}
+				}
+				else {
+					treeOpen = ImGui::TreeNodeEx(obj->GetName().c_str(), flags);
+					if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+						SelectObject(obj);
+					}
 				}
 
 				char menupopupid[256];
@@ -402,8 +432,7 @@ void GameEditor::Render() {
 						if (ImGui::Selectable(objectMenu[i])) {
 							if (objectMenu[i] == "Delete") {
 								if (m_selectedID == obj->GetID()) {
-									m_selectedID = -1;
-									m_selectedObject = nullptr;
+									Unselect();
 								}
 								m_pScene->RemoveObject(obj);
 							}
@@ -420,6 +449,61 @@ void GameEditor::Render() {
 
 			ImGui::TreePop();
 		}
+		ImGui::SeparatorText("");
+		if (ImGui::TreeNodeEx("Actions", scene_flags)) {
+			// Check scene object clicked
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+				Unselect();
+			}
+
+			std::vector<EngineAction*> scene_actions = m_pScene->GetSceneActions();
+			for (EngineAction* action : scene_actions) {
+				if (!action)
+					continue;
+
+				ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf;
+				if (m_selectedAction && action->GetID() == m_selectedID) {
+					flags |= ImGuiTreeNodeFlags_Selected;
+				}
+
+				bool treeOpen = ImGui::TreeNodeEx(action->GetName().c_str(), flags);
+				if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+					SelectAction(action);
+				}
+
+				char menupopupid[256];
+				sprintf_s(menupopupid, 256, "%s%d", "MenuActionPopup", action->GetID());
+				if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+					ImGui::OpenPopup(menupopupid);
+				}
+
+				if (ImGui::BeginPopup(menupopupid)) {
+					static const char* objectMenu[] = { "Delete" };
+					static const int objectMenuCount = sizeof(objectMenu) / sizeof(objectMenu[0]);
+
+					for (int i = 0; i < objectMenuCount; ++i) {
+						// If an object type is selected
+						if (ImGui::Selectable(objectMenu[i])) {
+							if (objectMenu[i] == "Delete") {
+								if (m_selectedID == action->GetID()) {
+									Unselect();
+								}
+								m_pScene->RemoveAction(action);
+							}
+							ImGui::CloseCurrentPopup();
+						}
+					}
+
+					ImGui::EndPopup();
+				}
+
+				if (treeOpen)
+					ImGui::TreePop();
+			}
+			
+			ImGui::TreePop();
+		}
+
 		ImGui::End();
 
 		// Inspector tab on the right
@@ -440,6 +524,22 @@ void GameEditor::Render() {
 				m_pScene->SetChanged();
 			}
 		}
+		else if (m_selectedAction) {
+			std::string actionName = m_selectedAction->GetName();
+			ImGui::Text("Name:"); ImGui::SameLine();
+			if (ImGui::InputText("##ActionName", &actionName, ImGuiInputTextFlags_EnterReturnsTrue)) {
+				if (actionName.size() > 0) {
+					EngineAction* _action = m_pScene->FindAction(actionName);
+					if (!_action || _action == m_selectedAction) {
+						m_selectedAction->SetName(actionName);
+						m_pScene->SetChanged();
+					}
+					else {
+						MessageBox(m_hWnd, "Action with that name already exists.", "Failure", MB_OK);
+					}
+				}
+			}
+		}
 		else if (m_selectedObject) {
 			Vector2f pos = m_selectedObject->GetPosition();
 			Vector2i size = m_selectedObject->GetSize();
@@ -458,12 +558,18 @@ void GameEditor::Render() {
 			if (ImGui::DragFloat2("##ObjPos", &pos.x)) {
 				m_selectedObject->SetPosition(pos);
 				m_pScene->SetChanged();
+
+				if (m_selectedObject->GetObjectType() == Object_ButtonType)
+					static_cast<ButtonObject*>(m_selectedObject)->UpdateChild();
 			}
 
 			ImGui::Text("Rot:"); ImGui::SameLine();
 			if (ImGui::DragFloat("##ObjRot", &rotation)) {
 				m_selectedObject->SetRotation(rotation);
 				m_pScene->SetChanged();
+
+				if (m_selectedObject->GetObjectType() == Object_ButtonType)
+					static_cast<ButtonObject*>(m_selectedObject)->UpdateChild();
 			}
 
 			ImGui::Text("Size:"); ImGui::SameLine();
@@ -476,6 +582,9 @@ void GameEditor::Render() {
 				}
 				m_selectedObject->SetSize(size);
 				m_pScene->SetChanged();
+
+				if (m_selectedObject->GetObjectType() == Object_ButtonType)
+					static_cast<ButtonObject*>(m_selectedObject)->UpdateChild();
 			}
 
 			float* ObjColor = m_selectedObject->GetColor();
@@ -484,11 +593,11 @@ void GameEditor::Render() {
 				m_pScene->SetChanged();
 
 				D2D1::ColorF color(ObjColor[0], ObjColor[1], ObjColor[2], ObjColor[3]);
-				m_selectedObject->SetColor(m_pEngine->GetRenderTarget(), color);
+				m_selectedObject->SetColor(color);
 			}
 
 			if (m_selectedObject->GetObjectType() == Object_TextType) {
-				TextObject* textObj = dynamic_cast<TextObject*>(m_selectedObject);
+				TextObject* textObj = static_cast<TextObject*>(m_selectedObject);
 				float fontSize = textObj->GetFontSize();
 				ImGui::Text("FontSize:"); ImGui::SameLine();
 				if (ImGui::DragFloat("##ObjFont", &fontSize, 1.0f, 1.f, 1000.f)) {
@@ -555,6 +664,37 @@ void GameEditor::Render() {
 
 				ImGui::EndGroup();
 			}
+			else if (m_selectedObject->GetObjectType() == Object_ButtonType) {
+				ButtonObject* buttonObj = static_cast<ButtonObject*>(m_selectedObject);
+				Vector2f radius = buttonObj->GetRadius();
+				ImGui::Text("Radius:"); ImGui::SameLine();
+				if (ImGui::DragFloat2("##ObjButtonRadius", &radius.x)) {
+					buttonObj->SetRadius(radius);
+					m_pScene->SetChanged();
+				}
+
+				std::vector<EngineAction*> scene_actions = m_pScene->GetSceneActions();
+				EngineAction* action = buttonObj->GetCallback();
+				std::string actionName = "None";
+				if (action) {
+					actionName = action->GetName();
+				}
+
+				ImGui::Text("Action:"); ImGui::SameLine();
+				if (ImGui::BeginCombo("##ObjButtonActionCombo", actionName.c_str())) {
+					for (EngineAction* action_ : scene_actions) {
+						bool isSelected = (action_ == action);
+						if (ImGui::Selectable(action_->GetName().c_str(), isSelected)) {
+							buttonObj->SetCallback(action_);
+							m_pScene->SetChanged();
+						}
+						if (isSelected) {
+							ImGui::SetItemDefaultFocus();
+						}
+					}
+					ImGui::EndCombo();
+				}
+			}
 		}
 		else {
 			ImGui::Text("Please, select object.");
@@ -571,4 +711,28 @@ void GameEditor::Render() {
 
 void GameEditor::SetResize(UINT width, UINT height) {
 	m_pEngine->SetResizeSwapchain3D(width, height);
+}
+
+void GameEditor::SelectObject(Object* obj) {
+	Unselect();
+	m_selectedObject = obj;
+	m_selectedID = obj->GetID();
+}
+
+void GameEditor::SelectAction(EngineAction* action) {
+	Unselect();
+	m_selectedAction = action;
+	m_selectedID = action->GetID();
+}
+
+void GameEditor::SelectScene() {
+	Unselect();
+	m_bSelectedScene = true;
+}
+
+void GameEditor::Unselect() {
+	m_selectedID = -1;
+	m_selectedObject = nullptr;
+	m_selectedAction = nullptr;
+	m_bSelectedScene = false;
 }

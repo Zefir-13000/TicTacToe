@@ -12,6 +12,7 @@ public:
 	bool Initialize();
 	void Shutdown();
 
+	void TriggerEvent(EngineEvent event);
 private:
 	HWND m_hWnd;
 	HINSTANCE m_hInstance;

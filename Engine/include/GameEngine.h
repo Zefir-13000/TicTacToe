@@ -1,7 +1,18 @@
 #pragma once
 #include <stdafx.h>
-#include <TextObject.h>
+#include <EngineEvents.h>
 
+extern IDWriteFactory* g_pDWriteFactory;
+extern IDWriteFactory* GetDWriteFactory();
+
+extern HWND g_hWnd;
+extern HWND GetHWND();
+
+extern ID2D1RenderTarget* g_pD2DRenderTarget;
+extern ID2D1RenderTarget* GetRenderTarget();
+
+class Scene;
+class Object;
 class GameEngine {
 public:
 	GameEngine();
@@ -9,12 +20,10 @@ public:
 
 	void Tick();
 
-	IDWriteFactory* GetDWriteFactory() { return m_pDWriteFactory; };
-	ID2D1Factory* GetD2DFactory() { return m_pD2DFactory; };
-	ID2D1RenderTarget* GetRenderTarget() { return m_pD2DRenderTarget; }
+	ID2D1Factory* GetD2DFactory() { return m_pD2DFactory; }
 	IDXGISwapChain* GetSwapChainD3D() { return m_pSwapChain; }
-	ID3D11Device* GetDeviceD3D() { return m_pD3DDevice; };
-	ID3D11DeviceContext* GetDeviceContextD3D() { return m_pD3DDeviceContext; };
+	ID3D11Device* GetDeviceD3D() { return m_pD3DDevice; }
+	ID3D11DeviceContext* GetDeviceContextD3D() { return m_pD3DDeviceContext; }
 
 	void BeginRender2D();
 	void BeginRender3D();
@@ -26,21 +35,26 @@ public:
 
 	bool Initialize(HWND hWnd, UINT windowWidth, UINT windowHeight);
 	bool InitializeDXGISurface1(IDXGISurface1* pRenderDXT);
+	bool InitializeSwapchainRenderTarget();
 	bool InitializeImgui(HWND hWnd);
 
 	bool GetOccluded() { return m_SwapChainOccluded; };
 
 	void SetResizeSwapchain3D(UINT width, UINT height);
 	void SetOccluded(bool isOccluded);
+
+	void SetScene(Scene* pScene);
+
+	void TriggerEvent(EngineEvent event);
+
+	bool IsEditor() { return m_bInitedImgui; }
 private:
 	bool CreateDeviceD3D(HWND hWnd, UINT windowWidth, UINT windowHeight);
 	void CreateRenderTargetD3D();
 
-	HWND m_hWnd = nullptr;
+	Scene* m_pScene = nullptr; // ref
 
 	ID2D1Factory* m_pD2DFactory = nullptr;
-	IDWriteFactory* m_pDWriteFactory = nullptr;
-	ID2D1RenderTarget* m_pD2DRenderTarget = nullptr;
 	IDXGISurface1* m_pRenderDXT = nullptr;
 
 	ID3D11Device* m_pD3DDevice = nullptr;

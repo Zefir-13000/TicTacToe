@@ -15,9 +15,15 @@ public:
 	void Shutdown();
 
 	void SetResize(UINT width, UINT height);
+	void TriggerEvent(EngineEvent event);
 private:
 	bool InitializeViewport(UINT width, UINT height);
 	void RenderScene();
+
+	void SelectObject(Object* obj);
+	void SelectAction(EngineAction* action);
+	void SelectScene();
+	void Unselect();
 
 	HWND m_hWnd;
 	GameEngine* m_pEngine = nullptr;
@@ -25,6 +31,7 @@ private:
 
 	int m_selectedID = -1;
 	Object* m_selectedObject = nullptr;
+	EngineAction* m_selectedAction = nullptr;
 	bool m_bSelectedScene = false;
 
 	ImVec2 m_viewportSize;

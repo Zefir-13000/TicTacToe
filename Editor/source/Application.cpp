@@ -17,6 +17,10 @@ void Application::SetResize(UINT width, UINT height) {
 	m_pEditor->SetResize(width, height);
 }
 
+void Application::TriggerEvent(EngineEvent event) {
+	m_pEditor->TriggerEvent(event);
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT umessage, WPARAM wparam, LPARAM lparam)
 {
 	if (ImGui_ImplWin32_WndProcHandler(hwnd, umessage, wparam, lparam))
@@ -24,6 +28,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT umessage, WPARAM wparam, LPARAM lparam)
 
 	switch (umessage)
 	{
+	// Game only
+	/*case WM_LBUTTONDOWN:
+		GlobalApp()->TriggerEvent(EngineEvent_OnClick);
+		return 0;*/
 	case WM_SIZE:
 		if (wparam == SIZE_MINIMIZED)
 			return 0;

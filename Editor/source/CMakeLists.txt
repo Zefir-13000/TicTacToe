@@ -2,8 +2,6 @@
 # project specific logic here.
 #
 
-#file(GLOB IMGUI_SOURCES "${CMAKE_SOURCE_DIR}/Engine/include/imgui/*.cpp")
-
 # Add source to this project's executable.
 add_executable (TicTacToeEditor WIN32 "main.cpp" "GameEditor.cpp" "Application.cpp")
 set_target_properties(TicTacToeEditor PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/Editor")

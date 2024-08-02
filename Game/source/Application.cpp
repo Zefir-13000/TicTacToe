@@ -15,7 +15,16 @@ Application::~Application() {
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT umessage, WPARAM wparam, LPARAM lparam)
 {
-	if (umessage == WM_DESTROY) {
+	switch (umessage)
+	{
+	// Game only
+	case WM_LBUTTONDOWN:
+		GlobalApp()->TriggerEvent(EngineEvent_OnClick);
+		return 0;
+	case WM_MOUSEMOVE:
+		GlobalApp()->TriggerEvent(EngineEvent_MouseMove);
+		return 0;
+	case WM_DESTROY:
 		PostMessage(hwnd, WM_QUIT, 0, 0);
 		return 0;
 	}
@@ -52,7 +61,7 @@ bool Application::Initialize() {
 	int posX = (GetSystemMetrics(SM_CXSCREEN) - m_screenWidth) / 2;
 	int posY = (GetSystemMetrics(SM_CYSCREEN) - m_screenHeight) / 2;
 
-	m_hWnd = CreateWindowEx(0, m_applicationName, m_applicationName, WS_OVERLAPPEDWINDOW,
+	m_hWnd = CreateWindowEx(0, m_applicationName, m_applicationName, (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX),
 		posX, posY, m_screenWidth, m_screenHeight, NULL, NULL, m_hInstance, NULL);
 
 	ShowWindow(m_hWnd, SW_SHOW);
@@ -63,7 +72,9 @@ bool Application::Initialize() {
 	bool result;
 
 	m_pGame = new Game(m_hWnd);
-	result = m_pGame->Initialize();
+	std::string StartSceneName = "Menu";
+
+	result = m_pGame->Initialize(StartSceneName);
 	if (!result) {
 		OutputDebugString("Failed to init game.\n");
 		return false;
@@ -103,4 +114,8 @@ void Application::Run() {
 			m_pGame->Render();
 		}
 	}
+}
+
+void Application::TriggerEvent(EngineEvent event) {
+	m_pGame->TriggerEvent(event);
 }

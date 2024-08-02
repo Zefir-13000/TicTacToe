@@ -1,6 +1,7 @@
 #pragma once
 #include <stdafx.h>
 #include <GameEngine.h>
+#include <Scene.h>
 
 class Game {
 public:
@@ -10,14 +11,18 @@ public:
 	void Tick();
 	void Render();
 
-	bool Initialize();
+	bool Initialize(std::string& StartSceneName);
 	void Shutdown();
 
+	void TestEvent();
+	void TestEvent2(std::string SceneName);
+
+	void SetupActions();
+	void TriggerEvent(EngineEvent event);
 private:
+	void RenderScene();
+
 	HWND m_hWnd;
 	GameEngine* m_pEngine = nullptr;
-
-	ID2D1SolidColorBrush* m_pBlackBrush = nullptr;
-
-	TextObject* text1 = nullptr;
+	Scene* m_pScene = nullptr;
 };

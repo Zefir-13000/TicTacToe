@@ -1,10 +1,16 @@
 #include <Scene.h>
+#include <AllObjectTypes.h>
+
+Scene* g_pScene = nullptr;
+Scene* GetScene() { return g_pScene; }
 
 Scene::Scene(GameEngine* pEngine) {
+	g_pScene = this;
 	m_pEngine = pEngine;
+	m_pEngine->SetScene(this);
 
 	HRESULT hr;
-	hr = m_pEngine->GetRenderTarget()->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &m_pBlackBrush);
+	hr = GetRenderTarget()->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &m_pBlackBrush);
 	if (FAILED(hr)) {
 		OutputDebugString("Failed to create Black SolidBrush.\n");
 	}
@@ -47,34 +53,69 @@ Object* Scene::FindObjectById(int id) {
 
 Object* Scene::CreateObject(ObjectType objType) {
 	if (objType == Object_TextType) {
-		TextObject* text1 = new TextObject(m_pEngine->GetDWriteFactory(), 32.f);
+		TextObject* text1 = new TextObject();
 		text1->SetColor(GetBlackBrush());
-		text1->SetPosition(0, 0);
 		text1->SetSize(150, 50);
 
 		AddObject(text1);
 		return text1;
+	}
+	else if (objType == Object_ButtonType) {
+		ButtonObject* button = new ButtonObject();
+		button->SetColor(GetBlackBrush());
+		button->GetTextObject()->SetColor(GetBlackBrush());
+		button->GetTextObject()->SetSize(150, 50);
+		button->SetSize(150, 50);
+
+		AddObject(button);
+		return button;
 	}
 	return nullptr;
 }
 
 Object* Scene::CreateObjectByTypeName(std::string typeName) {
 	if (typeName == "TextObject") {
-		TextObject* text1 = new TextObject(m_pEngine->GetDWriteFactory(), 32.f);
-		text1->SetColor(GetBlackBrush());
-		text1->SetPosition(0, 0);
-		text1->SetSize(150, 50);
+		TextObject* text = new TextObject();
+		text->SetColor(GetBlackBrush());
+		text->SetSize(150, 50);
 
-		AddObject(text1);
-		return text1;
+		AddObject(text);
+		return text;
+	}
+	else if (typeName == "ButtonObject") {
+		ButtonObject* button = new ButtonObject();
+		button->SetColor(GetBlackBrush());
+		button->GetTextObject()->SetColor(GetBlackBrush());
+		button->GetTextObject()->SetSize(150, 50);
+		button->SetSize(150, 50);
+
+		AddObject(button);
+		return button;
 	}
 	return nullptr;
 }
 
 void Scene::Render() {
-	ID2D1RenderTarget* pRenderTarget = m_pEngine->GetRenderTarget();
 	for (Object* obj : m_objects) {
-		obj->Render(pRenderTarget);
+		obj->Render();
+	}
+}
+
+void Scene::EventOnClick() {
+	for (Object* obj : m_objects) {
+		if (obj->GetObjectType() == Object_ButtonType) {
+			ButtonObject* button = static_cast<ButtonObject*>(obj);
+			button->OnClick();
+		}
+	}
+}
+
+void Scene::EventMouseMove() {
+	for (Object* obj : m_objects) {
+		if (obj->GetObjectType() == Object_ButtonType) {
+			ButtonObject* button = static_cast<ButtonObject*>(obj);
+			button->OnHover();
+		}
 	}
 }
 
@@ -89,20 +130,42 @@ void Scene::Save(std::string& filename) {
 	stream.write((const char*)&m_clearColor[0], sizeof(float) * 4);
 	stream << std::endl;
 
+	// Save actions data
+	for (EngineAction* action : m_actions) {
+		stream << 1;
+		action->Save(stream);
+		stream << std::endl;
+	}
+	stream << 0 << std::endl;
+
 	// Save objects data
 	for (Object* obj : m_objects) {
 		stream << obj->GetObjectType();
 		obj->Save(stream);
 		stream << std::endl;
 	}
+
 	SetSceneState(Scene_Saved);
 	m_bIsChanged = false;
 	stream.close();
 }
 
-void Scene::Load(std::string& filename) {
+bool Scene::Load(std::string& filename) {
+	if (!filename.ends_with(".scene")) {
+		filename += ".scene";
+	}
+	if (!m_pEngine->IsEditor()) {
+		static std::string game_scene_path = "data/scenes/";
+		filename = game_scene_path + filename;
+	}
+
 	m_saveFilename = filename;
 	std::ifstream stream(filename);
+	if (!stream.good()) {
+		MessageBox(GetHWND(), "Scene file not found.", "Error", MB_OK);
+		return false;
+	}
+
 	// Load scene data
 	size_t name_size = 0;
 	stream.read((char*)&name_size, sizeof(size_t));
@@ -110,6 +173,22 @@ void Scene::Load(std::string& filename) {
 	stream.read(&m_name[0], name_size);
 
 	stream.read((char*)&m_clearColor[0], sizeof(float) * 4);
+
+	// Load actions data
+	for (EngineAction* action : m_actions) {
+		delete action;
+	}
+	m_actions.clear();
+
+	int placeholder = 0;
+	while (stream >> placeholder) {
+		if (placeholder == 0)
+			break;
+		EngineAction* action = CreateAction();
+		if (action) {
+			action->Load(stream);
+		}
+	}
 
 	// Load objects data
 	for (Object* obj : m_objects) {
@@ -122,12 +201,14 @@ void Scene::Load(std::string& filename) {
 		ObjectType ObjType = static_cast<ObjectType>(objTypeInt);
 		Object* obj = CreateObject(ObjType);
 		if (obj) {
-			obj->Load(m_pEngine->GetRenderTarget(), stream);
+			obj->Load(stream);
 		}
 	}
+
 	SetSceneState(Scene_Saved);
 	m_bIsChanged = false;
 	stream.close();
+	return true;
 }
 
 std::string Scene::ShowSaveDialog(HWND hWnd) {
@@ -282,4 +363,61 @@ void Scene::HandleOpenNewScene(HWND hWnd) {
 			Load(filename);
 		}
 	}
+}
+
+EngineAction* Scene::FindActionById(int id) {
+	for (EngineAction* action : m_actions) {
+		if (action->GetID() == id)
+			return action;
+	}
+	return nullptr;
+}
+
+EngineAction* Scene::FindAction(std::string name) {
+	for (EngineAction* action : m_actions) {
+		if (action->GetName() == name)
+			return action;
+	}
+	return nullptr;
+}
+
+void Scene::AddAction(EngineAction* action) {
+	m_actions.push_back(action);
+}
+
+void Scene::RemoveAction(EngineAction* action) {
+	int id_to_delete = action->GetID();
+	std::erase_if(m_actions, [&id_to_delete](EngineAction* ele) {
+		return ele->GetID() == id_to_delete;
+	});
+}
+
+EngineAction* Scene::CreateAction() {
+	static int _action_id = 0;
+	std::string action_name;
+loop:
+	action_name = "Action" + std::to_string(_action_id);
+	if (!FindAction(action_name)) {
+		EngineAction* action = new EngineAction(action_name);
+		AddAction(action);
+		return action;
+	}
+	else {
+		++_action_id;
+		goto loop;
+	}
+
+	return nullptr;
+}
+
+void Scene::SetupActionCallback(std::string name, std::function<void()> callback) {
+	m_actionMap[name] = callback;
+}
+
+std::function<void()> Scene::FindActionCallback(EngineAction* action) {
+	std::string action_name = action->GetName();
+	if (m_actionMap.contains(action_name)) {
+		return m_actionMap[action_name];
+	}
+	return nullptr;
 }

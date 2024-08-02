@@ -1,3 +1,4 @@
 .vs/
 out/
+submodules/
 CMakeSettings.json

@@ -3,10 +3,11 @@
 
 class TextObject : public Object {
 public:
-	TextObject(IDWriteFactory* pDWriteFactory, float fontSize);
+	TextObject(float fontSize);
+	TextObject();
 	~TextObject();
 
-	void Render(ID2D1RenderTarget* pD2DRenderTarget) override;
+	void Render() override;
 
 	float GetFontSize();
 	void SetFontSize(float fontSize);
@@ -23,7 +24,7 @@ public:
 	void UpdateFormat(float fontSize, DWRITE_FONT_WEIGHT fontWeight);
 	
 	virtual void Save(std::ofstream& stream);
-	virtual void Load(ID2D1RenderTarget* pD2DRenderTarget, std::ifstream& stream);
+	virtual void Load(std::ifstream& stream);
 private:
 	float m_fontSize = 32.f;
 	std::string m_text;

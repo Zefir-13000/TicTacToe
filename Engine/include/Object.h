@@ -1,10 +1,11 @@
 #pragma once
 #include <stdafx.h>
+#include <GameEngine.h>
 
 enum ObjectType {
 	Object_None		= 0,
 	Object_TextType = 1,
-
+	Object_ButtonType = 2,
 };
 
 struct Vector2f {
@@ -33,9 +34,9 @@ public:
 		m_pDWriteFactory = nullptr;
 		m_pBrush = nullptr;
 	}
-	virtual void Render(ID2D1RenderTarget* pD2DRenderTarget) = 0;
+	virtual void Render() = 0;
 
-	int GetID() { return id; }
+	int GetID() const { return id; }
 
 	std::string GetName() { return m_name; }
 	void SetName(std::string name) { m_name = name; }
@@ -52,13 +53,13 @@ public:
 	void SetSize(UINT width, UINT height) { m_renderSize = Vector2i(width, height); }
 
 	float* GetColor() { return m_objColor; }
-	void SetColor(ID2D1RenderTarget* RenderTarget, D2D1::ColorF color) {
+	void SetColor(D2D1::ColorF color) {
 		if (m_pBrush && !m_bIsBrushRef) {
 			m_pBrush->Release();
 		}
 
 		HRESULT hr;
-		hr = RenderTarget->CreateSolidColorBrush(color, &m_pBrush);
+		hr = GetRenderTarget()->CreateSolidColorBrush(color, &m_pBrush);
 		if (FAILED(hr)) {
 			OutputDebugString("Failed to create ColorBrush.\n");
 		}
@@ -75,10 +76,10 @@ public:
 	ObjectType GetObjectType() { return m_ObjType; }
 
 	virtual void Save(std::ofstream& stream);
-	virtual void Load(ID2D1RenderTarget* pD2DRenderTarget, std::ifstream& stream);
+	virtual void Load(std::ifstream& stream);
 protected:
-	Object(IDWriteFactory* pDWriteFactory) { 
-		m_pDWriteFactory = pDWriteFactory;
+	Object() { 
+		m_pDWriteFactory = GetDWriteFactory();
 
 		static int _id = 0; 
 		id = _id++; 

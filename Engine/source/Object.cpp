@@ -15,7 +15,7 @@ void Object::Save(std::ofstream& stream) {
 	stream.write((const char*)&m_rotation, sizeof(float));
 }
 
-void Object::Load(ID2D1RenderTarget* pD2DRenderTarget, std::ifstream& stream) {
+void Object::Load(std::ifstream& stream) {
 	size_t name_size = 0;
 	stream.read((char*)&name_size, sizeof(size_t));
 	m_name.resize(name_size);
@@ -28,5 +28,5 @@ void Object::Load(ID2D1RenderTarget* pD2DRenderTarget, std::ifstream& stream) {
 	stream.read((char*)&m_rotation, sizeof(float));
 
 	D2D1::ColorF color(m_objColor[0], m_objColor[1], m_objColor[2], m_objColor[3]);
-	SetColor(pD2DRenderTarget, color);
+	SetColor(color);
 }

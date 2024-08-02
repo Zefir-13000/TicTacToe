@@ -1,4 +1,15 @@
 #include <GameEngine.h>
+#include <Scene.h>
+#include <Object.h>
+
+IDWriteFactory* g_pDWriteFactory = nullptr;
+IDWriteFactory* GetDWriteFactory() { return g_pDWriteFactory; }
+
+HWND g_hWnd = nullptr;
+HWND GetHWND() { return g_hWnd; }
+
+ID2D1RenderTarget* g_pD2DRenderTarget = nullptr;
+ID2D1RenderTarget* GetRenderTarget() { return g_pD2DRenderTarget; }
 
 GameEngine::GameEngine() {
 
@@ -6,12 +17,12 @@ GameEngine::GameEngine() {
 
 GameEngine::~GameEngine() {
     // Clear 2D
-    if (m_pD2DRenderTarget)
-        m_pD2DRenderTarget->Release();
+    if (g_pD2DRenderTarget)
+        g_pD2DRenderTarget->Release();
     if (m_pRenderDXT)
         m_pRenderDXT->Release();
-    if (m_pDWriteFactory)
-        m_pDWriteFactory->Release();
+    if (g_pDWriteFactory)
+        g_pDWriteFactory->Release();
     if (m_pD2DFactory)
         m_pD2DFactory->Release();
 
@@ -24,23 +35,25 @@ GameEngine::~GameEngine() {
         m_pD3DDeviceContext->Release();
     if (m_pD3DDevice) {
         m_pD3DDevice->Release();
-        ImGui_ImplDX11_Shutdown();
-        ImGui_ImplWin32_Shutdown();
-        ImGui::DestroyContext();
+        if (m_bInitedImgui) {
+            ImGui_ImplDX11_Shutdown();
+            ImGui_ImplWin32_Shutdown();
+            ImGui::DestroyContext();
+        }
     }
 }
 
 bool GameEngine::InitializeDXGISurface1(IDXGISurface1* pRenderDXT) {
     HRESULT hr;
-    if (m_pD2DRenderTarget)
-        m_pD2DRenderTarget->Release();
+    if (g_pD2DRenderTarget)
+        g_pD2DRenderTarget->Release();
     if (m_pRenderDXT)
         m_pRenderDXT->Release();
 
     m_pRenderDXT = pRenderDXT;
 
     D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0);
-    hr = m_pD2DFactory->CreateDxgiSurfaceRenderTarget(m_pRenderDXT, &props, &m_pD2DRenderTarget);
+    hr = m_pD2DFactory->CreateDxgiSurfaceRenderTarget(m_pRenderDXT, &props, &g_pD2DRenderTarget);
     if (FAILED(hr))
     {
         OutputDebugString("Failed to create Dxgi Surface.\n");
@@ -49,10 +62,31 @@ bool GameEngine::InitializeDXGISurface1(IDXGISurface1* pRenderDXT) {
     return true;
 }
 
+bool GameEngine::InitializeSwapchainRenderTarget() {
+    HRESULT hr;
+
+    hr = m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderDXT));
+    if (FAILED(hr))
+    {
+        OutputDebugString("Failed to get buffer RenderDXT.\n");
+        return false;
+    }
+
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0);
+    hr = m_pD2DFactory->CreateDxgiSurfaceRenderTarget(m_pRenderDXT, &props, &g_pD2DRenderTarget);
+    if (FAILED(hr))
+    {
+        OutputDebugString("Failed to create Dxgi Surface.\n");
+        return false;
+    }
+
+    return true;
+}
+
 bool GameEngine::Initialize(HWND hWnd, UINT windowWidth, UINT windowHeight) {
 	HRESULT hr;
 
-    m_hWnd = hWnd;
+    g_hWnd = hWnd;
 
     auto options = D2D1_FACTORY_OPTIONS();
 #ifdef _DEBUG
@@ -65,7 +99,7 @@ bool GameEngine::Initialize(HWND hWnd, UINT windowWidth, UINT windowHeight) {
         return false;
     }
 
-    hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&m_pDWriteFactory));
+    hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&g_pDWriteFactory));
     if (FAILED(hr)) {
         OutputDebugString("Failed to create DirectWrite factory.\n");
         return false;
@@ -75,17 +109,6 @@ bool GameEngine::Initialize(HWND hWnd, UINT windowWidth, UINT windowHeight) {
         OutputDebugString("Failed to create DeviceD3D.\n");
         return false;
     }
-
-    //RECT rect;
-    //GetClientRect(m_hWnd, &rect);
-
-    // Init 2D on main window
-    /*hr = m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&m_pRenderDXT));
-    if (FAILED(hr))
-    {
-        OutputDebugString("Failed to get buffer RenderDXT.\n");
-        return false;
-    }*/
 
 	return true;
 }
@@ -125,20 +148,44 @@ void GameEngine::Tick() {
 
 }
 
+void GameEngine::SetScene(Scene* pScene) {
+    m_pScene = pScene;
+}
+
+void GameEngine::TriggerEvent(EngineEvent event) {
+    switch (event)
+    {
+    case EngineEvent_OnClick:
+        if (m_pScene) {
+            m_pScene->EventOnClick();
+        }
+        break;
+    case EngineEvent_MouseMove:
+        if (m_pScene) {
+            m_pScene->EventMouseMove();
+        }
+    default:
+        break;
+    }
+}
+
 void GameEngine::BeginRender2D() {
-    m_pD2DRenderTarget->BeginDraw();
+    g_pD2DRenderTarget->BeginDraw();
 }
 
 void GameEngine::BeginRender3D() {
     if (m_pD3DDevice) {
-        ImGui_ImplDX11_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();
+        if (m_bInitedImgui) {
+            ImGui_ImplDX11_NewFrame();
+            ImGui_ImplWin32_NewFrame();
+            ImGui::NewFrame();
+        }
 
-        const float clear_color[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        const float clear_color[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
 
         m_pD3DDeviceContext->OMSetRenderTargets(1, &m_pD3DRenderTargetView, nullptr);
-        m_pD3DDeviceContext->ClearRenderTargetView(m_pD3DRenderTargetView, clear_color);
+        if (IsEditor())
+            m_pD3DDeviceContext->ClearRenderTargetView(m_pD3DRenderTargetView, clear_color);
     }
     else {
         OutputDebugString("D3DDevice is not initialized to begin draw!\n");
@@ -146,20 +193,22 @@ void GameEngine::BeginRender3D() {
 }
 
 void GameEngine::EndRender2D() {
-    m_pD2DRenderTarget->EndDraw();
+    g_pD2DRenderTarget->EndDraw();
 }
 
 void GameEngine::EndRender3D() {
     if (m_pD3DDevice) {
-        ImGui::Render();
-        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+        if (m_bInitedImgui) {
+            ImGui::Render();
+            ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
-        ImGuiIO& io = ImGui::GetIO();
-        // Update and Render additional Platform Windows
-        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-        {
-            ImGui::UpdatePlatformWindows();
-            ImGui::RenderPlatformWindowsDefault();
+            ImGuiIO& io = ImGui::GetIO();
+            // Update and Render additional Platform Windows
+            if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+            {
+                ImGui::UpdatePlatformWindows();
+                ImGui::RenderPlatformWindowsDefault();
+            }
         }
 
         // Present
@@ -173,11 +222,11 @@ void GameEngine::EndRender3D() {
 }
 
 void GameEngine::ClearRender(D2D1::ColorF color) {
-    m_pD2DRenderTarget->Clear(color);
+    g_pD2DRenderTarget->Clear(color);
 }
 
 void GameEngine::Render(Object* object) {
-    object->Render(m_pD2DRenderTarget);
+    object->Render();
 }
 
 void GameEngine::SetOccluded(bool isOccluded) {

@@ -1,10 +1,21 @@
 #include <TextObject.h>
 
-TextObject::TextObject(IDWriteFactory* pDWriteFactory, float fontSize) : Object(pDWriteFactory) {
+TextObject::TextObject(float fontSize) {
 	m_ObjType = Object_TextType;
     m_name = "TextObject";
     m_text = "Text";
     pTextFormat = nullptr;
+    m_fontSize = fontSize;
+
+    UpdateFormat(m_fontSize, m_fontWeight);
+}
+
+TextObject::TextObject() {
+    m_ObjType = Object_TextType;
+    m_name = "TextObject";
+    m_text = "Text";
+    pTextFormat = nullptr;
+    m_fontSize = 32;
 
     UpdateFormat(m_fontSize, m_fontWeight);
 }
@@ -79,7 +90,9 @@ void TextObject::SetTextAlign(DWRITE_TEXT_ALIGNMENT textAlign) {
     pTextFormat->SetTextAlignment(m_textAlign);
 }
 
-void TextObject::Render(ID2D1RenderTarget* pD2DRenderTarget) {
+void TextObject::Render() {
+    ID2D1RenderTarget* pD2DRenderTarget = GetRenderTarget();
+
     if (!pTextFormat) {
         OutputDebugString("TextObject - pTextFormat was null\n");
         return;
@@ -118,8 +131,8 @@ void TextObject::Save(std::ofstream& stream) {
     stream.write(&m_text[0], text_size);
 }
 
-void TextObject::Load(ID2D1RenderTarget* pD2DRenderTarget, std::ifstream& stream) {
-    Object::Load(pD2DRenderTarget, stream);
+void TextObject::Load(std::ifstream& stream) {
+    Object::Load(stream);
 
     stream.read((char*)&m_fontSize, sizeof(float));
 
