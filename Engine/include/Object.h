@@ -6,6 +6,7 @@ enum ObjectType {
 	Object_None		= 0,
 	Object_TextType = 1,
 	Object_ButtonType = 2,
+	Object_TextureType = 3,
 };
 
 struct Vector2f {

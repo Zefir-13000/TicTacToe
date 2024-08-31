@@ -70,6 +70,13 @@ Object* Scene::CreateObject(ObjectType objType) {
 		AddObject(button);
 		return button;
 	}
+	else if (objType == Object_TextureType) {
+		TextureObject* texture = new TextureObject();
+		texture->SetSize(64, 64);
+
+		AddObject(texture);
+		return texture;
+	}
 	return nullptr;
 }
 
@@ -91,6 +98,13 @@ Object* Scene::CreateObjectByTypeName(std::string typeName) {
 
 		AddObject(button);
 		return button;
+	}
+	else if (typeName == "TextureObject") {
+		TextureObject* texture = new TextureObject();
+		texture->SetSize(64, 64);
+
+		AddObject(texture);
+		return texture;
 	}
 	return nullptr;
 }

@@ -20,6 +20,8 @@ private:
 	bool InitializeViewport(UINT width, UINT height);
 	void RenderScene();
 
+	void ObjectInspectorSection();
+
 	void SelectObject(Object* obj);
 	void SelectAction(EngineAction* action);
 	void SelectScene();
