@@ -11,6 +11,7 @@ TextureObject::TextureObject() {
 TextureObject::~TextureObject() {
 	if (m_texture) {
 		delete m_texture;
+		m_texture = nullptr;
 	}
 }
 
@@ -19,12 +20,21 @@ Texture* TextureObject::GetTexture() const {
 }
 
 void TextureObject::SetTexture(Texture* texture) {
-	if (m_texture) {
+	if (m_texture && m_texture != texture) {
 		delete m_texture;
+		m_texture = nullptr;
 	}
 
-	m_texture = texture;
-	m_textureSize = m_texture->GetSize();
+	if (texture != nullptr) {
+		m_texture = texture;
+		m_textureSize = m_texture->GetSize();
+	}
+	else {
+		OutputDebugString("TextureObject::SetTexture texture was null");
+		delete m_texture;
+		m_texture = nullptr;
+		m_textureSize = Vector2i(0, 0);
+	}
 }
 
 Vector2i TextureObject::GetTextureSize() const {
@@ -46,6 +56,11 @@ void TextureObject::UpdateSize(uint32_t width, uint32_t height) {
 }
 
 void TextureObject::Render() {
+	if (!m_texture->GetBitmap()) {
+		OutputDebugString("[TextureObject::Render] m_texture bitmap was null");
+		return;
+	}
+
 	ID2D1RenderTarget* pD2DRenderTarget = GetRenderTarget();
 
 	if (m_rotation != 0) {

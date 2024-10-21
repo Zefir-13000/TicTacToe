@@ -17,15 +17,23 @@ Texture::Texture(uint8_t* srcData, uint32_t width, uint32_t height) {
 }
 
 Texture::~Texture() {
-	if (m_bitmap)
+	if (m_bitmap) {
+		OutputDebugString("Releasing m_bitmap\n");
+		OutputDebugString(m_filename.c_str());
+
 		m_bitmap->Release();
+		m_bitmap = nullptr;
+		OutputDebugString("m_bitmap released\n");
+	}
 }
 
 bool Texture::InitBitmap(uint8_t* srcData) {
-	if (m_bitmap)
+	if (m_bitmap) {
 		m_bitmap->Release();
+		m_bitmap = nullptr;
+	}
 
-	D2D1_PIXEL_FORMAT pixelFormat = D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE);
+	D2D1_PIXEL_FORMAT pixelFormat = D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_IGNORE);
 	HRESULT hr = GetRenderTarget()->CreateBitmap(
 		D2D1::SizeU(m_width, m_height),
 		srcData,
@@ -33,8 +41,10 @@ bool Texture::InitBitmap(uint8_t* srcData) {
 		D2D1::BitmapProperties(pixelFormat),
 		&m_bitmap);
 
-	if (FAILED(hr))
+	if (FAILED(hr)) {
+		m_bitmap = nullptr;
 		return false;
+	}
 	return true;
 }
 
@@ -71,8 +81,10 @@ Texture* Texture::GetEmptyTexture(uint32_t width, uint32_t height) {
 }
 
 bool Texture::LoadFromFile(std::string filename) {
-	if (m_bitmap)
+	if (m_bitmap) {
 		m_bitmap->Release();
+		m_bitmap = nullptr;
+	}
 
 	IWICImagingFactory* pIWICFactory = nullptr;
 	IWICBitmapDecoder* pDecoder = NULL;
@@ -82,6 +94,15 @@ bool Texture::LoadFromFile(std::string filename) {
 
 	CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_IWICImagingFactory, reinterpret_cast<void**>(&pIWICFactory));
 
+	if (filename != TEXTURE_DEFAULT_FILENAME && filename.find("\\") == filename.npos) {
+
+		char buffer[MAX_PATH];
+		GetModuleFileName(NULL, buffer, MAX_PATH);
+
+		std::string exe_path(buffer);
+		std::string filename_path = exe_path.substr(0, exe_path.rfind("\\"));
+		filename = filename_path + "\\data\\images\\" + filename;
+	}
 	std::wstring wfilename(filename.begin(), filename.end());
 
 	HRESULT hr = pIWICFactory->CreateDecoderFromFilename(
@@ -93,15 +114,31 @@ bool Texture::LoadFromFile(std::string filename) {
 	);
 
 	if (FAILED(hr)) {
+        OutputDebugString("Failed to create decoder from filename\n");
+        pIWICFactory->Release();  // Clean up factory
+        return false;
+    }
+
+	hr = pDecoder->GetFrame(0, &pSource);
+	if (FAILED(hr)) {
+		OutputDebugString("Failed to get frame from decoder\n");
+		pDecoder->Release();
+		pIWICFactory->Release();
 		return false;
 	}
 
-	pDecoder->GetFrame(0, &pSource);
-	pIWICFactory->CreateFormatConverter(&pConverter);
+	hr = pIWICFactory->CreateFormatConverter(&pConverter);
+	if (FAILED(hr)) {
+		OutputDebugString("Failed to create format converter\n");
+		pSource->Release();
+		pDecoder->Release();
+		pIWICFactory->Release();
+		return false;
+	}
 
 	pSource->GetSize(&m_width, &m_height);
 
-	pConverter->Initialize(
+	hr = pConverter->Initialize(
 		pSource,
 		GUID_WICPixelFormat32bppPBGRA,
 		WICBitmapDitherTypeNone,
@@ -109,19 +146,32 @@ bool Texture::LoadFromFile(std::string filename) {
 		0.f,
 		WICBitmapPaletteTypeMedianCut
 	);
+	if (FAILED(hr)) {
+		OutputDebugString("Failed to initialize format converter\n");
+		pConverter->Release();
+		pSource->Release();
+		pDecoder->Release();
+		pIWICFactory->Release();
+		return false;
+	}
 
-	GetRenderTarget()->CreateBitmapFromWicBitmap(
-		pConverter,
-		NULL,
-		&m_bitmap
-	);
+	hr = GetRenderTarget()->CreateBitmapFromWicBitmap(pConverter, NULL, &m_bitmap);
+	if (FAILED(hr)) {
+		OutputDebugString("Failed to create bitmap from WIC bitmap\n");
+		pConverter->Release();
+		pSource->Release();
+		pDecoder->Release();
+		pIWICFactory->Release();
+		return false;
+	}
 
 	filename = filename.substr(filename.rfind("\\") + 1);
 	m_filename = filename;
 
-	if (pDecoder) pDecoder->Release();
+	if (pConverter) pConverter->Release();
 	if (pSource) pSource->Release();
-	if (pStream) pStream->Release();
+	if (pDecoder) pDecoder->Release();
+	if (pIWICFactory) pIWICFactory->Release();
 
 	return true;
 }

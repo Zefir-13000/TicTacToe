@@ -537,6 +537,13 @@ void GameEditor::Render() {
 }
 
 void GameEditor::ObjectInspectorSection() {
+	bool objActive = m_selectedObject->GetActive();
+	ImGui::Text("Active:"); ImGui::SameLine();
+	if (ImGui::Checkbox("##ObjActive", &objActive)) {
+		m_selectedObject->SetActive(objActive);
+		m_pScene->SetChanged();
+	}
+
 	std::string objName = m_selectedObject->GetName();
 	ImGui::Text("Name:"); ImGui::SameLine();
 	if (ImGui::InputText("##ObjName", &objName, ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -662,6 +669,13 @@ void GameEditor::ObjectInspectorSection() {
 	}
 	else if (m_selectedObject->GetObjectType() == Object_ButtonType) {
 		ButtonObject* buttonObj = static_cast<ButtonObject*>(m_selectedObject);
+		bool bClickable = buttonObj->GetClickable();
+		ImGui::Text("Clickable:"); ImGui::SameLine();
+		if (ImGui::Checkbox("##ObjButtonClickable", &bClickable)) {
+			buttonObj->SetClickable(bClickable);
+			m_pScene->SetChanged();
+		}
+
 		Vector2f radius = buttonObj->GetRadius();
 		ImGui::Text("Radius:"); ImGui::SameLine();
 		if (ImGui::DragFloat2("##ObjButtonRadius", &radius.x)) {

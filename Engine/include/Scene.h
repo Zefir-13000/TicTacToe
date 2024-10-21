@@ -15,6 +15,8 @@ public:
 	~Scene();
 
 	Object* FindObjectById(int id);
+	Object* FindObjectByName(std::string objectName);
+
 	void AddObject(Object* object);
 	void RemoveObject(Object* object);
 	void RemoveObject(int objectID);

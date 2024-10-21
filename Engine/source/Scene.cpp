@@ -17,12 +17,18 @@ Scene::Scene(GameEngine* pEngine) {
 }
 
 Scene::~Scene() {
-	if (m_pBlackBrush)
-		m_pBlackBrush->Release();
+	for (EngineAction* action : m_actions) {
+		delete action;
+	}
+	m_actions.clear();
 
 	for (Object* obj : m_objects) {
 		delete obj;
 	}
+	m_objects.clear();
+	
+	if (m_pBlackBrush)
+		m_pBlackBrush->Release();
 }
 
 void Scene::AddObject(Object* object) {
@@ -46,6 +52,14 @@ void Scene::RemoveObject(int objectID) {
 Object* Scene::FindObjectById(int id) {
 	for (Object* obj : m_objects) {
 		if (obj->GetID() == id)
+			return obj;
+	}
+	return nullptr;
+}
+
+Object* Scene::FindObjectByName(std::string objectName) {
+	for (Object* obj : m_objects) {
+		if (obj->GetName() == objectName)
 			return obj;
 	}
 	return nullptr;
@@ -111,7 +125,8 @@ Object* Scene::CreateObjectByTypeName(std::string typeName) {
 
 void Scene::Render() {
 	for (Object* obj : m_objects) {
-		obj->Render();
+		if (obj->GetActive())
+			obj->Render();
 	}
 }
 

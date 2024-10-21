@@ -1,8 +1,21 @@
 #include <Game.h>
+#include <Application.h>
 #include <chrono>
+
+Game* g_pGame = nullptr;
+Game* GetPGame() { return g_pGame; }
+
+void Alert(const char* lpCaption, const char* lpText) {
+#ifndef _WIN32
+	fprintf(stderr, "Message: '%s', Detail: '%s'\n", lpCaption, lpText);
+#else
+	MessageBox(NULL, lpText, lpCaption, MB_OK);
+#endif
+}
 
 Game::Game(HWND hWnd) {
 	m_hWnd = hWnd;
+	g_pGame = this;
 }
 
 Game::~Game() {
@@ -30,42 +43,83 @@ bool Game::Initialize(std::string& StartSceneName) {
 		return false;
 	}
 
+	m_pGameClient = new GameClient(m_pEngine);
+
 	SetupActions();
 
 	return true;
 }
 
 void Game::Shutdown() {
-	if (m_pEngine) {
-		delete m_pEngine;
+	if (m_pGameClient) {
+		delete m_pGameClient;
 	}
 	if (m_pScene) {
 		delete m_pScene;
+	}
+	if (m_pEngine) {
+		delete m_pEngine;
 	}
 }
 
 void Game::Tick() {
 	m_pEngine->Tick();
+	m_pGameClient->Tick();
+}
+
+void Game::LoadScene(std::string SceneName) {
+	m_pScene->Load(SceneName);
+}
+
+Scene* Game::GetScene() const {
+	return m_pScene;
 }
 
 void Game::TriggerEvent(EngineEvent event) {
 	m_pEngine->TriggerEvent(event);
 }
 
-void Game::TestEvent() {
-	std::string scene_Name = "Menu2";
-	m_pScene->Load(scene_Name);
+void Game::Action_StartGame() {
+	m_pGameClient->SetGameState(EClientGameState::ClientCreatingLobby);
 }
 
-void Game::TestEvent2(std::string SceneName) {
-	m_pScene->Load(SceneName);
+void Game::Action_ExitGame() {
+	PostQuitMessage(0);
+}
+
+void Game::Action_LobbyBack() {
+	if (m_pGameClient->GetLobbySteamID().IsValid())
+		SteamMatchmaking()->LeaveLobby(m_pGameClient->GetLobbySteamID());
+
+	m_pGameClient->ResetClientData();
+	m_pGameClient->SetGameState(EClientGameState::ClientGameMenu);
+}
+
+void Game::Action_LobbyReady() {
+	SteamMatchmaking()->SetLobbyMemberData(m_pGameClient->GetLobbySteamID(), "IsReady", "true");
+}
+
+void Game::Action_LobbyStart() {
+	OutputDebugString("Game starting...\n");
+}
+
+void Game::Action_LobbyInvite() {
+	SteamFriends()->ActivateGameOverlayInviteDialog(m_pGameClient->GetLobbySteamID());
 }
 
 void Game::SetupActions() {
-	auto testEvent_cb = std::bind(&Game::TestEvent, this);
-	auto testEvent2_cb = std::bind(&Game::TestEvent2, this, "Menu");
-	m_pScene->SetupActionCallback("Action0", testEvent_cb);
-	m_pScene->SetupActionCallback("ActionBack", testEvent2_cb);
+	auto mainMenu_startGame_cb = std::bind(&Game::Action_StartGame, this);
+	auto mainMenu_exitGame_cb = std::bind(&Game::Action_ExitGame, this);
+	auto lobby_back_cb = std::bind(&Game::Action_LobbyBack, this);
+	auto lobby_ready_cb = std::bind(&Game::Action_LobbyReady, this);
+	auto lobby_start_cb = std::bind(&Game::Action_LobbyStart, this);
+	auto lobby_invite_cb = std::bind(&Game::Action_LobbyInvite, this);
+	m_pScene->SetupActionCallback("MainMenu_StartGame", mainMenu_startGame_cb);
+	m_pScene->SetupActionCallback("MainMenu_ExitGame", mainMenu_exitGame_cb);
+	m_pScene->SetupActionCallback("Lobby_Back", lobby_back_cb);
+	m_pScene->SetupActionCallback("Lobby_Ready", lobby_ready_cb);
+	m_pScene->SetupActionCallback("Lobby_Start", lobby_start_cb);
+	m_pScene->SetupActionCallback("Lobby_Invite", lobby_invite_cb);
 }
 
 void Game::RenderScene() {
@@ -97,4 +151,16 @@ void Game::Render() {
 	// Swapchain empty render call
 	m_pEngine->BeginRender3D();
 	m_pEngine->EndRender3D();
+}
+
+void Game::Render(std::string SceneName) {
+	if (GlobalApp()->IsClosing()) {
+		return;
+	}
+
+	if (m_pScene->GetSceneName() != SceneName) {
+		m_pScene->Load(SceneName);
+	}
+
+	Game::Render();
 }

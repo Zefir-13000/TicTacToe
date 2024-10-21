@@ -29,3 +29,5 @@ add_subdirectory ("Editor/source")
 
 file(COPY data DESTINATION "${CMAKE_BINARY_DIR}/bin/Editor")
 file(COPY data DESTINATION "${CMAKE_BINARY_DIR}/bin/Game")
+file(COPY steam_api64.dll DESTINATION "${CMAKE_BINARY_DIR}/bin/Game")
+file(COPY steam_appid.txt DESTINATION "${CMAKE_BINARY_DIR}/bin/Game")

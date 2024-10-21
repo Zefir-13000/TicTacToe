@@ -3,10 +3,10 @@
 #include <GameEngine.h>
 
 enum ObjectType {
-	Object_None		= 0,
-	Object_TextType = 1,
-	Object_ButtonType = 2,
-	Object_TextureType = 3,
+	Object_None			= 0,
+	Object_TextType		= 1,
+	Object_ButtonType	= 2,
+	Object_TextureType	= 3,
 };
 
 struct Vector2f {
@@ -41,6 +41,9 @@ public:
 
 	std::string GetName() { return m_name; }
 	void SetName(std::string name) { m_name = name; }
+
+	bool GetActive() { return m_bObjectActive; }
+	void SetActive(bool bActive) { m_bObjectActive = bActive; }
 
 	float GetRotation() { return m_rotation; }
 	void SetRotation(float rot) { m_rotation = rot; }
@@ -87,6 +90,7 @@ protected:
 	}
 
 	ObjectType m_ObjType = Object_None;
+	bool m_bObjectActive = true;
 	Vector2f m_objPos = Vector2f::ZERO;
 	Vector2i m_renderSize = Vector2i::ZERO;
 	float m_rotation = 0;

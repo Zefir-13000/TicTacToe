@@ -12,7 +12,13 @@ ID2D1RenderTarget* g_pD2DRenderTarget = nullptr;
 ID2D1RenderTarget* GetRenderTarget() { return g_pD2DRenderTarget; }
 
 GameEngine::GameEngine() {
+    // Setup timing data
+    LARGE_INTEGER l;
+    ::QueryPerformanceFrequency(&l);
+    m_ulPerfCounterToMillisecondsDivisor = l.QuadPart / 1000;
 
+    ::QueryPerformanceCounter(&l);
+    m_ulFirstQueryPerformanceCounterValue = l.QuadPart;
 }
 
 GameEngine::~GameEngine() {
@@ -145,7 +151,11 @@ bool GameEngine::InitializeImgui(HWND hWnd) {
 }
 
 void GameEngine::Tick() {
+    LARGE_INTEGER l;
+    ::QueryPerformanceCounter(&l);
 
+    m_ulPreviousGameTickCount = m_ulGameTickCount;
+    m_ulGameTickCount = (l.QuadPart - m_ulFirstQueryPerformanceCounterValue) / m_ulPerfCounterToMillisecondsDivisor;
 }
 
 void GameEngine::SetScene(Scene* pScene) {
@@ -353,4 +363,8 @@ void GameEngine::SetResizeSwapchain3D(UINT width, UINT height) {
     }
     m_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
     GameEngine::CreateRenderTargetD3D();
+}
+
+uint64 GameEngine::GetGameTickCount() const {
+    return m_ulGameTickCount;
 }

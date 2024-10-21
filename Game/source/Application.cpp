@@ -5,6 +5,10 @@
 Application* g_pApp = nullptr;
 Application* GlobalApp() { return g_pApp; };
 
+extern "C" void __cdecl SteamAPIDebugTextHook(int nSeverity, const char* pchDebugText) {
+	OutputDebugStringA(pchDebugText);
+}
+
 Application::Application() {
 	g_pApp = this;
 }
@@ -24,14 +28,45 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT umessage, WPARAM wparam, LPARAM lparam)
 	case WM_MOUSEMOVE:
 		GlobalApp()->TriggerEvent(EngineEvent_MouseMove);
 		return 0;
+	case WM_MOVE:
+		GlobalApp()->SingleRender();
+		return 0;
+	case WM_CLOSE:
 	case WM_DESTROY:
-		PostMessage(hwnd, WM_QUIT, 0, 0);
+	case WM_QUIT:
+		GlobalApp()->SetClosing();
+		PostQuitMessage(0);
 		return 0;
 	}
 	return DefWindowProc(hwnd, umessage, wparam, lparam);
 }
 
+void Application::SingleRender() {
+	if (m_pGame != nullptr) {
+		m_pGame->Tick();
+	}
+}
+
 bool Application::Initialize() {
+
+	// Init steam
+	bool result;
+
+	result = SteamAPI_RestartAppIfNecessary(k_uAppIdInvalid);
+	if (result) {
+		return false;
+	}
+
+	result = SteamAPI_Init();
+	if (!result)
+	{
+		Alert("Fatal Error", "Steam must be running to play this game (SteamAPI_Init() failed).\n");
+		return false;
+	}
+
+#ifdef _DEBUG
+	SteamClient()->SetWarningMessageHook(&SteamAPIDebugTextHook);
+#endif // _DEBUG
 
 	// Init window
 	WNDCLASSEX wc{};
@@ -69,10 +104,8 @@ bool Application::Initialize() {
 	SetFocus(m_hWnd);
 
 	// Init engine
-	bool result;
-
 	m_pGame = new Game(m_hWnd);
-	std::string StartSceneName = "Menu";
+	std::string StartSceneName = "MainMenu";
 
 	result = m_pGame->Initialize(StartSceneName);
 	if (!result) {
@@ -83,7 +116,20 @@ bool Application::Initialize() {
 	return true;
 }
 
+bool Application::IsClosing() const {
+	return m_bIsClosing;
+}
+
+void Application::SetClosing() {
+	m_bIsClosing = true;
+}
+
 void Application::Shutdown() {
+	if (m_pGame) {
+		m_pGame->Shutdown();
+		delete m_pGame;
+	}
+
 	DestroyWindow(m_hWnd);
 	m_hWnd = NULL;
 
@@ -91,14 +137,12 @@ void Application::Shutdown() {
 	UnregisterClass(m_applicationName, m_hInstance);
 	m_hInstance = NULL;
 
-	if (m_pGame) {
-		m_pGame->Shutdown();
-		delete m_pGame;
-	}
+	SteamAPI_Shutdown();
 }
 
 void Application::Run() {
 	MSG msg;
+
 	while (true) {
 		m_pGame->Tick();
 		
@@ -109,9 +153,6 @@ void Application::Run() {
 
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
-		}
-		else {
-			m_pGame->Render();
 		}
 	}
 }

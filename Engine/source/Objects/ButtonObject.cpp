@@ -93,13 +93,14 @@ void ButtonObject::OnHover() {
 }
 
 void ButtonObject::Focus() {
-	if (!m_bFocused) {
+	if (!m_bFocused && m_bClickable) {
 		m_bFocused = true;
 
 		float* text_color = m_buttonText->GetColor();
 		text_color[0] = 1;
 		text_color[1] = 1;
 		text_color[2] = 1;
+		text_color[3] = 1;
 
 		D2D1::ColorF new_color(text_color[0], text_color[1], text_color[2], text_color[3]);
 		m_buttonText->SetColor(new_color);
@@ -107,16 +108,50 @@ void ButtonObject::Focus() {
 }
 
 void ButtonObject::UnFocus() {
-	if (m_bFocused) {
+	if (m_bFocused && m_bClickable) {
 		m_bFocused = false;
 
 		float* text_color = m_buttonText->GetColor();
 		text_color[0] = 0;
 		text_color[1] = 0;
 		text_color[2] = 0;
+		text_color[3] = 1;
 
 		D2D1::ColorF new_color(text_color[0], text_color[1], text_color[2], text_color[3]);
 		m_buttonText->SetColor(new_color);
+	}
+}
+
+bool ButtonObject::GetClickable() const {
+	return m_bClickable;
+}
+
+void ButtonObject::SetClickable(bool bClickable) {
+	m_bClickable = bClickable;
+	if (bClickable) {
+		UnFocus();
+		float* text_color = m_buttonText->GetColor();
+		text_color[0] = 0;
+		text_color[1] = 0;
+		text_color[2] = 0;
+		text_color[3] = 1;
+
+		D2D1::ColorF new_color(text_color[0], text_color[1], text_color[2], text_color[3]);
+		m_buttonText->SetColor(new_color);
+		ButtonObject::SetColor(new_color);
+	}
+	else {
+		UnFocus();
+
+		float* text_color = m_buttonText->GetColor();
+		text_color[0] = 0;
+		text_color[1] = 0;
+		text_color[2] = 0;
+		text_color[3] = 0.2;
+
+		D2D1::ColorF new_color(text_color[0], text_color[1], text_color[2], text_color[3]);
+		m_buttonText->SetColor(new_color);
+		ButtonObject::SetColor(new_color);
 	}
 }
 
@@ -136,6 +171,7 @@ void ButtonObject::Save(std::ofstream& stream) {
 	Object::Save(stream);
 
 	stream.write((const char*)&m_radius, sizeof(Vector2f));
+	stream.write((const char*)&m_bClickable, sizeof(bool));
 
 	// Action
 	std::string action_name = m_callback->GetName();
@@ -150,6 +186,7 @@ void ButtonObject::Load(std::ifstream& stream) {
 	Object::Load(stream);
 
 	stream.read((char*)&m_radius, sizeof(Vector2f));
+	stream.read((char*)&m_bClickable, sizeof(bool));
 
 	size_t name_size = 0;
 	std::string action_name = "";

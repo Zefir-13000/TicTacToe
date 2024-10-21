@@ -8,6 +8,8 @@ void Object::Save(std::ofstream& stream) {
 	stream.write((const char*)&name_size, sizeof(size_t));
 	stream.write(&m_name[0], name_size);
 
+	stream.write((const char*)&m_bObjectActive, sizeof(bool));
+
 	stream.write((const char*)&m_objColor[0], sizeof(float) * 4);
 
 	stream.write((const char*)&m_objPos, sizeof(Vector2f));
@@ -20,6 +22,8 @@ void Object::Load(std::ifstream& stream) {
 	stream.read((char*)&name_size, sizeof(size_t));
 	m_name.resize(name_size);
 	stream.read(&m_name[0], name_size);
+
+	stream.read((char*)&m_bObjectActive, sizeof(bool));
 
 	stream.read((char*)&m_objColor[0], sizeof(float) * 4);
 

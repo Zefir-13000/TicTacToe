@@ -48,6 +48,8 @@ public:
 	void TriggerEvent(EngineEvent event);
 
 	bool IsEditor() { return m_bInitedImgui; }
+
+	uint64 GetGameTickCount() const;
 private:
 	bool CreateDeviceD3D(HWND hWnd, UINT windowWidth, UINT windowHeight);
 	void CreateRenderTargetD3D();
@@ -64,4 +66,9 @@ private:
 
 	bool m_SwapChainOccluded = false;
 	bool m_bInitedImgui = false;
+
+	uint64 m_ulGameTickCount;
+	uint64 m_ulPreviousGameTickCount;
+	uint64 m_ulPerfCounterToMillisecondsDivisor;
+	uint64 m_ulFirstQueryPerformanceCounterValue;
 };

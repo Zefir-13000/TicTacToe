@@ -15,6 +15,9 @@ public:
 	void Focus();
 	void UnFocus();
 
+	bool GetClickable() const;
+	void SetClickable(bool bClickable);
+
 	EngineAction* GetCallback() const;
 	void SetCallback(EngineAction* callback);
 
@@ -34,4 +37,5 @@ private:
 	EngineAction* m_callback = nullptr;
 
 	bool m_bFocused = false;
+	bool m_bClickable = true;
 };

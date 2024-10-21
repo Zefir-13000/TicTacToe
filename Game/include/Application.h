@@ -2,15 +2,21 @@
 #include <stdafx.h>
 #include <Game.h>
 
+extern "C" void __cdecl SteamAPIDebugTextHook(int nSeverity, const char* pchDebugText);
+
 class Application {
 public:
 	Application();
 	~Application();
 
 	void Run();
+	void SingleRender();
 
 	bool Initialize();
 	void Shutdown();
+
+	void SetClosing();
+	bool IsClosing() const;
 
 	void TriggerEvent(EngineEvent event);
 private:
@@ -21,6 +27,8 @@ private:
 	UINT m_screenWidth, m_screenHeight;
 
 	Game* m_pGame = nullptr;
+
+	bool m_bIsClosing = false;
 };
 
 extern Application* g_pApp;
