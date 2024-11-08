@@ -121,9 +121,9 @@ void GameServer::ReceiveNetworkData() {
 					{
 						bFound = true;
 						MsgClientSendLocalUpdate_t* pMsg = (MsgClientSendLocalUpdate_t*)message->GetData();
-						if (pMsg->AccessUpdateData()->isValid() && CheckValidMove(pMsg->AccessUpdateData())) {
+						/*if (pMsg->AccessUpdateData()->isValid() && CheckValidMove(pMsg->AccessUpdateData()) && i == m_GameData.m_PlayerTurnIndex) {
 							ChangePlayerTurn();
-						}
+						}*/
 						OnReceiveClientUpdateData(i, pMsg->AccessUpdateData());
 						if (pMsg->AccessUpdateData()->isValid()) {
 							uint32_t win = CheckWin();
@@ -470,7 +470,8 @@ void GameServer::OnReceiveClientUpdateData(uint32 PlayerIndex, ClientGameUpdateD
 	{
 		m_ClientData[PlayerIndex].m_ulTickCountLastData = m_pGameEngine->GetGameTickCount();
 		m_Players[PlayerIndex]->OnReceiveClientUpdate(pUpdateData);
-		if (pUpdateData->isValid() && CheckValidMove(pUpdateData)) {
+		if (pUpdateData->isValid() && CheckValidMove(pUpdateData) && PlayerIndex == m_GameData.m_PlayerTurnIndex) {
+			ChangePlayerTurn();
 			uint32_t x, y;
 			m_Players[PlayerIndex]->GetMove(x, y);
 			if (x > 0 && y > 0 && x < 4 && y < 4) {
