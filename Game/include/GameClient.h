@@ -7,9 +7,25 @@
 #include <GameLobby.h>
 #include <TextureObject.h>
 
+static std::string convertToTwoDigitIndex(int index) {
+	int row = index / 3 + 1;
+	int col = index % 3 + 1;
+
+	return std::to_string(row) + std::to_string(col);
+}
+
+static int convertToIndex(int x, int y) {
+	return (y - 1) * 3 + (x - 1);
+}
+
 class GameEngine;
 class GameClient {
 public:
+	enum class TicTacUnit {
+		CROSS = 1,
+		NOUGHT = 2
+	};
+
 	GameClient(GameEngine* pEngine);
 	~GameClient();
 
@@ -25,6 +41,18 @@ public:
 	void SetGameState(EClientGameState eState);
 
 	void ResetClientData();
+
+	void MakeMove(int index);
+
+	static std::string convertToTicTacUnit(int unit) {
+		if (unit == static_cast<int>(GameClient::TicTacUnit::CROSS)) {
+			return "X";
+		}
+		else if (unit == static_cast<int>(GameClient::TicTacUnit::NOUGHT)) {
+			return "O";
+		}
+		return "";
+	}
 
 	CSteamID GetLobbySteamID() const { return m_pLobby->GetLobbySteamID(); }
 	CSteamID GetLocalSteamID() const { return m_LocalSteamID; }
@@ -52,7 +80,7 @@ private:
 	uint32 m_PlayerIndex;
 	EClientConnectionState m_eConnectedStatus;
 
-	GamePlayer* m_Players[MAX_PLAYERS_PER_SERVER] = { nullptr };
+	GamePlayer* m_Players[MAX_PLAYERS_PER_SERVER] = { 0 };
 	CSteamID m_SteamIDPlayers[MAX_PLAYERS_PER_SERVER];
 	std::string m_PlayersNames[MAX_PLAYERS_PER_SERVER];
 	Texture* m_PlayerTextures[MAX_PLAYERS_PER_SERVER] = { nullptr };
@@ -60,6 +88,12 @@ private:
 
 	GameServer* m_pServer = nullptr;
 	GameEngine* m_pGameEngine = nullptr;
+
+	GameStateUpdateData_t m_GameData;
+	GameStateUpdateData_t m_PrevGameData;
+	float m_LocalGameTimer;
+	uint64 m_DeltaTimeTicks;
+	uint32_t last_x, last_y;
 
 	uint64 m_ulLastNetworkDataReceivedTime;
 	uint64 m_ulLastConnectionAttemptRetryTime;
@@ -98,6 +132,7 @@ private:
 	STEAM_CALLBACK(GameClient, OnSteamServersConnected, SteamServersConnected_t);
 	STEAM_CALLBACK(GameClient, OnSteamServersDisconnected, SteamServersDisconnected_t);
 
+	STEAM_CALLBACK(GameClient, OnLobbyGameCreated, LobbyGameCreated_t);
 	STEAM_CALLBACK(GameClient, OnLobbyUpdate, LobbyChatUpdate_t);
 	STEAM_CALLBACK(GameClient, OnLobbyDataUpdate, LobbyDataUpdate_t);
 	STEAM_CALLBACK(GameClient, OnGameLobbyJoinRequested, GameLobbyJoinRequested_t);

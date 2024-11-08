@@ -78,7 +78,7 @@ void ButtonObject::Render() {
 }
 
 void ButtonObject::OnClick() {
-	if (m_callback && CheckClicked()) {
+	if (m_callback && GetClickable() && CheckClicked()) {
 		m_callback->Call();
 	}
 }

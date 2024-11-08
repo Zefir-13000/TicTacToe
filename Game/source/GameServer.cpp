@@ -9,6 +9,8 @@ GameServer::GameServer(GameEngine* pEngine) : m_pGameEngine(pEngine) {
 	uint32 unIP = INADDR_ANY;
 	uint16 usMasterServerUpdaterPort = GAME_MASTER_SERVER_UPDATE_PORT;
 
+	m_GameState = EServerGameState::ServerWaitingForPlayers;
+
 #ifdef USE_GS_AUTH_API
 	EServerMode eMode = eServerModeAuthenticationAndSecure;
 #else
@@ -119,7 +121,32 @@ void GameServer::ReceiveNetworkData() {
 					{
 						bFound = true;
 						MsgClientSendLocalUpdate_t* pMsg = (MsgClientSendLocalUpdate_t*)message->GetData();
+						if (pMsg->AccessUpdateData()->isValid() && CheckValidMove(pMsg->AccessUpdateData())) {
+							ChangePlayerTurn();
+						}
 						OnReceiveClientUpdateData(i, pMsg->AccessUpdateData());
+						if (pMsg->AccessUpdateData()->isValid()) {
+							uint32_t win = CheckWin();
+							if (win == 3) {
+								m_GameData.m_RoundEnded = true;
+								m_GameData.m_GameTimer = 5;
+								m_GameDataTimerServer = 5;
+								m_GameData.m_WinPlayerIndex = 2;
+								m_GameData.m_HostIsCrosses = !m_GameData.m_HostIsCrosses;
+							}
+							else if (win != 0) {
+								m_GameData.m_RoundEnded = true;
+								m_GameData.m_GameTimer = 5;
+								m_GameDataTimerServer = 5;
+								if (m_GameData.m_HostIsCrosses) {
+									m_GameData.m_WinPlayerIndex = win - 1;
+								}
+								else {
+									m_GameData.m_WinPlayerIndex = !(win - 1);
+								}
+								m_GameData.m_HostIsCrosses = !m_GameData.m_HostIsCrosses;
+							}
+						}
 						break;
 					}
 				}
@@ -167,6 +194,139 @@ void GameServer::ReceiveNetworkData() {
 	}
 }
 
+void GameServer::ChangePlayerTurn() {
+	++m_GameData.m_PlayerTurnIndex;
+	if (m_GameData.m_PlayerTurnIndex + 1 > MAX_PLAYERS_PER_SERVER) {
+		m_GameData.m_PlayerTurnIndex = 0;
+	}
+	m_GameData.m_GameTimer = SERVER_GAME_TIMER_TURN;
+	m_GameDataTimerServer = SERVER_GAME_TIMER_TURN;
+}
+
+void GameServer::NextRound() {
+	m_GameData.m_GameTimer = SERVER_GAME_TIMER_TURN;
+	m_GameDataTimerServer = SERVER_GAME_TIMER_TURN;
+	m_GameData.m_RoundEnded = false;
+	memset(m_GameData.m_TicTacTable, 0, sizeof(m_GameData.m_TicTacTable));
+}
+
+bool GameServer::CheckValidMove(ClientGameUpdateData_t* gameData) {
+	uint32_t x, y;
+	gameData->GetMove(x, y);
+	if (m_GameData.m_TicTacTable[convertToIndex(x, y)] == 0) {
+		return true;
+	}
+	return false;
+}
+
+uint32_t GameServer::CheckWin() {
+	// check vert
+	for (uint32_t x = 1; x < 4; ++x) {
+		bool flag = true;
+		uint32_t prev_unit = 0;
+		for (uint32_t y = 1; y < 4; ++y) {
+			uint32_t cell_unit = m_GameData.m_TicTacTable[convertToIndex(x, y)];
+			if (cell_unit == 0) {
+				flag = false;
+				break;
+			}
+			if (prev_unit == 0) {
+				prev_unit = cell_unit;
+				continue;
+			}
+			if (prev_unit != cell_unit) {
+				flag = false;
+				break;
+			}
+		}
+
+		if (flag) {
+			return prev_unit;
+		}
+	}
+	// check horz
+	for (uint32_t y = 1; y < 4; ++y) {
+		bool flag = true;
+		uint32_t prev_unit = 0;
+		for (uint32_t x = 1; x < 4; ++x) {
+			uint32_t cell_unit = m_GameData.m_TicTacTable[convertToIndex(x, y)];
+			if (cell_unit == 0) {
+				flag = false;
+				break;
+			}
+			if (prev_unit == 0) {
+				prev_unit = cell_unit;
+				continue;
+			}
+			if (prev_unit != cell_unit) {
+				flag = false;
+				break;
+			}
+		}
+
+		if (flag) {
+			return prev_unit;
+		}
+	}
+
+	// check major diagonal
+	bool flag_diag = true;
+	uint32_t prev_unit_diag = 0;
+	for (uint32_t xy = 1; xy < 4; ++xy) {
+		uint32_t cell_unit = m_GameData.m_TicTacTable[convertToIndex(xy, xy)];
+		if (cell_unit == 0) {
+			flag_diag = false;
+			break;
+		}
+		if (prev_unit_diag == 0) {
+			prev_unit_diag = cell_unit;
+			continue;
+		}
+		if (prev_unit_diag != cell_unit) {
+			flag_diag = false;
+			break;
+		}
+	}
+	if (flag_diag) {
+		return prev_unit_diag;
+	}
+
+	// check minor diagonal
+	flag_diag = true;
+	prev_unit_diag = 0;
+	for (uint32_t xy = 1; xy < 4; ++xy) {
+		uint32_t cell_unit = m_GameData.m_TicTacTable[convertToIndex(4 - xy, xy)];
+		if (cell_unit == 0) {
+			flag_diag = false;
+			break;
+		}
+		if (prev_unit_diag == 0) {
+			prev_unit_diag = cell_unit;
+			continue;
+		}
+		if (prev_unit_diag != cell_unit) {
+			flag_diag = false;
+			break;
+		}
+	}
+	if (flag_diag) {
+		return prev_unit_diag;
+	}
+
+	bool flag_draw = true;
+	for (int i = 0; i < 9; ++i) {
+		uint32_t cell_unit = m_GameData.m_TicTacTable[i];
+		if (cell_unit == 0) {
+			flag_draw = false;
+			break;
+		}
+	}
+	if (flag_draw)
+		return 3;
+
+	return 0;
+}
+
 void GameServer::Tick() {
 	SteamGameServer_RunCallbacks();
 	SendUpdatedServerDetailsToSteam();
@@ -211,7 +371,40 @@ void GameServer::Tick() {
 		break;
 
 	case EServerGameState::ServerActive:
-		// Update all the entities...
+		if (m_bJustTransitionedGameState) {
+			m_bJustTransitionedGameState = false;
+			m_GameData.m_GameTimer = SERVER_GAME_TIMER_TURN;
+			m_GameDataTimerServer = SERVER_GAME_TIMER_TURN;
+			m_DeltaTimeTicks = m_pGameEngine->GetGameTickCount();
+		}
+
+		m_GameDataTimerServer -= (m_pGameEngine->GetGameTickCount() - m_DeltaTimeTicks) / 1000.0f;
+		if (m_GameDataTimerServer <= 0 && !m_GameData.m_RoundEnded) {
+			ChangePlayerTurn();
+			m_GameData.m_RoundEnded = true;
+			m_GameData.m_GameTimer = 5;
+			m_GameDataTimerServer = 5;
+			if (m_GameData.m_HostIsCrosses) {
+				m_GameData.m_WinPlayerIndex = m_GameData.m_PlayerTurnIndex;
+				if (m_GameData.m_PlayerTurnIndex == 0) {
+					m_GameData.m_HostIsCrosses = !m_GameData.m_HostIsCrosses;
+				}
+			}
+			else {
+				m_GameData.m_WinPlayerIndex = !m_GameData.m_PlayerTurnIndex;
+				if (m_GameData.m_PlayerTurnIndex == 1) {
+					m_GameData.m_HostIsCrosses = !m_GameData.m_HostIsCrosses;
+				}
+			}
+			m_GameData.m_HostIsCrosses = !m_GameData.m_HostIsCrosses;
+		}
+		else if (m_GameDataTimerServer <= 0 && m_GameData.m_RoundEnded) {
+			NextRound();
+		}
+		m_GameData.m_GameTimer = m_GameDataTimerServer;
+		m_DeltaTimeTicks = m_pGameEngine->GetGameTickCount();
+
+
 		for (uint32 i = 0; i < MAX_PLAYERS_PER_SERVER; ++i)
 		{
 			//TODO: Replace with logic
@@ -226,7 +419,7 @@ void GameServer::Tick() {
 	case EServerGameState::ServerExiting:
 		break;
 	default:
-		OutputDebugString("Unhandled game state in CSpaceWarServer::RunFrame\n");
+		OutputDebugString("Unhandled game state in GameServer::Tick\n");
 	}
 
 	// Send client updates (will internal limit itself to the tick rate desired)
@@ -244,6 +437,7 @@ void GameServer::SendUpdateDataToAllClients()
 	MsgServerUpdateWorld_t msg;
 
 	msg.AccessUpdateData()->SetServerGameState(m_GameState);
+	msg.AccessUpdateData()->SetGameUpdateData(&m_GameData);
 	for (int i = 0; i < MAX_PLAYERS_PER_SERVER; ++i)
 	{
 		msg.AccessUpdateData()->SetPlayerActive(i, m_ClientData[i].m_bActive);
@@ -266,6 +460,7 @@ void GameServer::SendUpdateDataToAllClients()
 
 void GameServer::SetGameState(EServerGameState eState) {
 	m_ulStateTransitionTime = m_pGameEngine->GetGameTickCount();
+	m_bJustTransitionedGameState = true;
 	this->m_GameState = eState;
 }
 
@@ -275,6 +470,29 @@ void GameServer::OnReceiveClientUpdateData(uint32 PlayerIndex, ClientGameUpdateD
 	{
 		m_ClientData[PlayerIndex].m_ulTickCountLastData = m_pGameEngine->GetGameTickCount();
 		m_Players[PlayerIndex]->OnReceiveClientUpdate(pUpdateData);
+		if (pUpdateData->isValid() && CheckValidMove(pUpdateData)) {
+			uint32_t x, y;
+			m_Players[PlayerIndex]->GetMove(x, y);
+			if (x > 0 && y > 0 && x < 4 && y < 4) {
+				int index = convertToIndex(x, y);
+				if (m_GameData.m_HostIsCrosses) {
+					if (PlayerIndex == 0) {
+						m_GameData.m_TicTacTable[index] = 1;
+					}
+					else {
+						m_GameData.m_TicTacTable[index] = 2;
+					}
+				}
+				else {
+					if (PlayerIndex == 0) {
+						m_GameData.m_TicTacTable[index] = 2;
+					}
+					else {
+						m_GameData.m_TicTacTable[index] = 1;
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -579,8 +797,9 @@ void GameServer::OnAuthCompleted(bool bAuthSuccessful, uint32 iPendingAuthIndex)
 		// so that the one player can't just float around not letting the new one get into the game.
 		if (uPlayers == 2)
 		{
-			if (m_GameState != EServerGameState::ServerWaitingForPlayers)
+			if (m_GameState != EServerGameState::ServerWaitingForPlayers) {
 				SetGameState(EServerGameState::ServerActive);
+			}
 		}
 	}
 }

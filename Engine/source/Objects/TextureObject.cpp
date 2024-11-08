@@ -56,7 +56,7 @@ void TextureObject::UpdateSize(uint32_t width, uint32_t height) {
 }
 
 void TextureObject::Render() {
-	if (!m_texture->GetBitmap()) {
+	if (!m_texture || !m_texture->GetBitmap()) {
 		OutputDebugString("[TextureObject::Render] m_texture bitmap was null");
 		return;
 	}

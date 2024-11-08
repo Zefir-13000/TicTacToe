@@ -33,6 +33,11 @@ public:
 
 	void SendUpdateDataToAllClients();
 
+	void ChangePlayerTurn();
+	bool CheckValidMove(ClientGameUpdateData_t* gameData);
+	uint32_t CheckWin();
+	void NextRound();
+
 	CSteamID GetSteamID();
 	bool IsConnectedToSteam() { return m_bConnectedToSteam; }
 private:
@@ -68,11 +73,16 @@ private:
 	// Server Config
 	std::string m_ServerName;
 
+	bool m_bJustTransitionedGameState;
+
 	// Game Data
 	EServerGameState m_GameState;
+	GameStateUpdateData_t m_GameData;
+	double m_GameDataTimerServer;
+	uint64 m_DeltaTimeTicks;
 
 	uint32 m_PlayerCount = 0;
-	GamePlayer* m_Players[MAX_PLAYERS_PER_SERVER];
+	GamePlayer* m_Players[MAX_PLAYERS_PER_SERVER] = { 0 };
 
 	// Vector to keep track of client connections
 	ClientConnectionData_t m_ClientData[MAX_PLAYERS_PER_SERVER];
@@ -81,5 +91,4 @@ private:
 
 	uint64 m_ulStateTransitionTime;
 	uint64 m_ulLastServerUpdateTick;
-
 };

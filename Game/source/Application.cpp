@@ -92,12 +92,16 @@ bool Application::Initialize() {
 	m_screenWidth = 800;
 	m_screenHeight = 600;
 
+	// Adjust window rectangle to account for borders and title bar
+	RECT rect = { 0, 0, m_screenWidth, m_screenHeight };
+	AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
+
 	// Place the window in the middle of the screen.
 	int posX = (GetSystemMetrics(SM_CXSCREEN) - m_screenWidth) / 2;
 	int posY = (GetSystemMetrics(SM_CYSCREEN) - m_screenHeight) / 2;
 
 	m_hWnd = CreateWindowEx(0, m_applicationName, m_applicationName, (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX),
-		posX, posY, m_screenWidth, m_screenHeight, NULL, NULL, m_hInstance, NULL);
+		posX, posY, rect.right - rect.left, rect.bottom - rect.top, NULL, NULL, m_hInstance, NULL);
 
 	ShowWindow(m_hWnd, SW_SHOW);
 	SetForegroundWindow(m_hWnd);

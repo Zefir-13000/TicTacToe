@@ -23,6 +23,8 @@ GameClient::GameClient(GameEngine* pEngine) {
 	m_usServerPort = 0;
 	m_hConnServer = k_HSteamNetConnection_Invalid;
 
+	m_eConnectedStatus = k_EClientNotConnected;
+
 	SteamNetworkingUtils()->InitRelayNetworkAccess();
 
 	for (uint32 i = 0; i < MAX_PLAYERS_PER_SERVER; ++i)
@@ -192,6 +194,19 @@ void GameClient::JoinLobby(LobbyBrowserMenuItem_t lobbyInfo) {
 	}
 }
 
+void GameClient::OnLobbyGameCreated(LobbyGameCreated_t* pCallback)
+{
+	if (m_eGameState != EClientGameState::ClientInLobby)
+		return;
+
+	// join the game server specified, via whichever method we can
+	if (CSteamID(pCallback->m_ulSteamIDGameServer).IsValid())
+	{
+		//ResetClientData();
+		InitiateServerConnection(CSteamID(pCallback->m_ulSteamIDGameServer));
+	}
+}
+
 void GameClient::OnLobbyUpdate(LobbyChatUpdate_t* pCallback) {
 	std::string username;
 	if (pCallback->m_ulSteamIDUserChanged != m_LocalSteamID.ConvertToUint64() && pCallback->m_rgfChatMemberStateChange == k_EChatMemberStateChangeEntered) {
@@ -263,8 +278,6 @@ void GameClient::OnLobbyDataUpdate(LobbyDataUpdate_t* pCallback) {
 				}
 			}
 		}
-
-
 	}
 }
 
@@ -299,16 +312,19 @@ void GameClient::RemovePlayerFromLobby(int PlayerIndex) {
 	player1_avatar = static_cast<TextureObject*>(GetPGame()->GetScene()->FindObjectByName("Player1_img"));
 	player2_avatar = static_cast<TextureObject*>(GetPGame()->GetScene()->FindObjectByName("Player2_img"));
 
-	player2_nameText->SetText("");
-	player2_readyText->SetText("unready");
 	D2D1::ColorF red_color = D2D1::ColorF(1.0, 0, 0, 1.0);
-	player2_readyText->SetColor(red_color);
-	player2_readyText->SetActive(false);
+	if (player2_nameText && player2_readyText) {
+		player2_nameText->SetText("");
+		player2_readyText->SetText("unready");
+		
+		player2_readyText->SetColor(red_color);
+		player2_readyText->SetActive(false);
+	}
 	ButtonObject* player_invite_button = static_cast<ButtonObject*>(GetPGame()->GetScene()->FindObjectByName("Player_Invite"));
+	if (player_invite_button)
+		player_invite_button->SetActive(true);
 
-	player_invite_button->SetActive(true);
-
-	if (m_pLobby->CheckIsLobbyOwner(m_SteamIDPlayers[PlayerIndex])) {
+	if (m_pLobby->CheckIsLobbyOwner(m_SteamIDPlayers[PlayerIndex]) && player2_nameText && player2_readyText) {
 		player1_nameText->SetText(GetLocalPlayerName());
 		player1_readyText->SetText("unready");
 		player1_readyText->SetColor(red_color);
@@ -323,7 +339,8 @@ void GameClient::RemovePlayerFromLobby(int PlayerIndex) {
 		m_PlayerIndex = PlayerIndex;
 	}
 
-	player2_avatar->LoadTextureFromFile("empty_user_picture.png");
+	if (player2_avatar)
+		player2_avatar->LoadTextureFromFile("empty_user_picture.png");
 }
 
 void GameClient::OnGameLobbyJoinRequested(GameLobbyJoinRequested_t* pCallback)
@@ -333,6 +350,18 @@ void GameClient::OnGameLobbyJoinRequested(GameLobbyJoinRequested_t* pCallback)
 	OutputDebugString("Join lobby requested");
 	LobbyBrowserMenuItem_t menuItem = { pCallback->m_steamIDLobby, EClientGameState::ClientJoiningLobby };
 	JoinLobby(menuItem);
+}
+
+void GameClient::MakeMove(int index) {
+	int row = index / 3 + 1;
+	int col = index % 3 + 1;
+
+	OutputDebugString("Made move");
+	std::string mademove = "Made move, X: " + std::to_string(col) + ", Y: " + std::to_string(row);
+	OutputDebugStringA(mademove.c_str());
+	m_Players[m_PlayerIndex]->SetMove(col, row);
+	last_x = col;
+	last_y = row;
 }
 
 void GameClient::ResetClientData() {
@@ -417,6 +446,15 @@ void GameClient::InitiateServerConnection(uint32 unServerAddress, const int32 nP
 	m_GameServerPing.RetrieveSteamIDFromGameServer(this, m_unServerIP, m_usServerPort);
 }
 
+template <typename T>
+std::string to_string_with_precision(const T a_value, const int n = 2)
+{
+	std::ostringstream out;
+	out.precision(n);
+	out << std::fixed << a_value;
+	return std::move(out).str();
+}
+
 void GameClient::Tick() {
 	ReceiveNetworkData();
 
@@ -453,32 +491,29 @@ void GameClient::Tick() {
 
 	// ---------
 
-	switch (m_eGameState) {
-	case EClientGameState::ClientConnectingToSteam:
+	if (m_eGameState == EClientGameState::ClientConnectingToSteam) {
 		GetPGame()->Render("LoadScreen");
-		break;
-
-	case EClientGameState::ClientGameMenu:
+	}
+	else if (m_eGameState == EClientGameState::ClientGameMenu) {
 		GetPGame()->Render("MainMenu");
-		break;
-	case EClientGameState::ClientCreatingLobby:
+	}
+	else if (m_eGameState == EClientGameState::ClientCreatingLobby) {
 		GetPGame()->Render("LoadScreen");
-		break;
-
-	case EClientGameState::ClientInLobby:
+	}
+	else if (m_eGameState == EClientGameState::ClientInLobby) {
 		// display the lobby
 		//m_pLobby->RunFrame();
 		GetPGame()->Render("LobbyScreen");
 		lobbyText = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("LobbyName"));
 		player1_nameText = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("Player1_name"));
 		player2_nameText = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("Player2_name"));
-		
+
 		player1_readyText = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("Player1_ready"));
 		player2_readyText = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("Player2_ready"));
 
 		player1_avatar = static_cast<TextureObject*>(GetPGame()->GetScene()->FindObjectByName("Player1_img"));
 		player2_avatar = static_cast<TextureObject*>(GetPGame()->GetScene()->FindObjectByName("Player2_img"));
-		
+
 		player_invite_button = static_cast<ButtonObject*>(GetPGame()->GetScene()->FindObjectByName("Player_Invite"));
 		game_start_button = static_cast<ButtonObject*>(GetPGame()->GetScene()->FindObjectByName("Lobby_Start"));
 
@@ -507,7 +542,7 @@ void GameClient::Tick() {
 
 				player1_nameText->SetText(m_PlayersNames[m_PlayerIndex]);
 			}
-			
+
 			if (m_PlayerTextures[!m_PlayerIndex] != nullptr && player2_avatar->GetTexture() != m_PlayerTextures[!m_PlayerIndex]) {
 				player2_nameText->SetText(m_PlayersNames[!m_PlayerIndex]);
 				player2_avatar->SetTexture(m_PlayerTextures[!m_PlayerIndex]);
@@ -530,9 +565,9 @@ void GameClient::Tick() {
 			else if (game_start_button->GetClickable()) {
 				game_start_button->SetClickable(false);
 			}
-			
-			//if (m_pServer)
-			//	break;
+
+			if (m_pServer)
+				goto exit_state_check;
 
 
 			//SteamMatchmaking()->SetLobbyData(m_steamIDLobby, "game_starting", "1");
@@ -569,36 +604,23 @@ void GameClient::Tick() {
 				}
 			}
 		}
-
-		// see if we have a game server ready to play on
-		if (m_pServer && m_pServer->IsConnectedToSteam())
-		{
-			// server is up; tell everyone else to connect
-			SteamMatchmaking()->SetLobbyGameServer(m_pLobby->GetLobbySteamID(), 0, 0, m_pServer->GetSteamID());
-			// start connecting ourself via localhost (this will automatically leave the lobby)
-			InitiateServerConnection(m_pServer->GetSteamID());
-		}
-		break;
-	case EClientGameState::ClientJoiningLobby:
+	}
+	else if (m_eGameState == EClientGameState::ClientJoiningLobby) {
 		GetPGame()->Render("LoadScreen");
 		if (m_pGameEngine->GetGameTickCount() - m_ulStateTransitionTime > MILLISECONDS_CONNECTION_TIMEOUT)
 		{
 			OutputDebugString("Timed out connecting to lobby.");
 			SetGameState(EClientGameState::ClientGameConnectionFailure);
 		}
-		break;
-	case EClientGameState::ClientGameConnectionFailure:
-		//DrawConnectionFailureText();
-
-		//if (bEscapePressed)
+	}
+	else if (m_eGameState == EClientGameState::ClientGameConnectionFailure) {
 		SetGameState(EClientGameState::ClientGameMenu);
+	}
 
-		break;
-
-	case EClientGameState::ClientGameConnecting:
+	else if (m_eGameState == EClientGameState::ClientGameConnecting) {
 		// Draw text telling the user a connection attempt is in progress
 		//DrawConnectionAttemptText();
-		std::cout << "Connecting server..." << std::endl;
+		GetPGame()->Render("LoadScreen");
 		// Check if we've waited too long and should time out the connection
 		if (m_pGameEngine->GetGameTickCount() - m_ulStateTransitionTime > MILLISECONDS_CONNECTION_TIMEOUT)
 		{
@@ -609,22 +631,194 @@ void GameClient::Tick() {
 			SetGameState(EClientGameState::ClientGameConnectionFailure);
 		}
 
-		break;
-	case EClientGameState::ClientGameActive:
+	}
+	else if (m_eGameState == EClientGameState::ClientGameStartServer) {
+		GetPGame()->Render("LoadScreen");
+
+		if (m_pServer && m_pServer->IsConnectedToSteam())
+		{
+			// server is up; tell everyone else to connect
+			SteamMatchmaking()->SetLobbyGameServer(GetLobbySteamID(), 0, 0, m_pServer->GetSteamID());
+			//ResetClientData();
+			// start connecting ourself via localhost (this will automatically leave the lobby)
+			InitiateServerConnection(m_pServer->GetSteamID());
+		}
+
+		if (m_pServer)
+			goto exit_state_check;
+
+		m_pServer = new GameServer(m_pGameEngine);
+	}
+	else if (m_eGameState == EClientGameState::ClientGameActive) {
+		GetPGame()->Render("GameScreen");
+		if (m_bJustTransitionedGameState) {
+			m_bJustTransitionedGameState = false;
+			for (int i = 0; i < MAX_PLAYERS_PER_SERVER; ++i) {
+				m_PlayerTextures[i] = nullptr;
+				m_PlayersNames[i] = SteamFriends()->GetFriendPersonaName(m_SteamIDPlayers[i]);
+			}
+			m_DeltaTimeTicks = m_pGameEngine->GetGameTickCount();
+			memset(m_GameData.m_TicTacTable, 0, sizeof(m_GameData.m_TicTacTable));
+		}
+
+		player1_nameText = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("Player1_name"));
+		player2_nameText = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("Player2_name"));
+
+		player1_avatar = static_cast<TextureObject*>(GetPGame()->GetScene()->FindObjectByName("Player1_img"));
+		player2_avatar = static_cast<TextureObject*>(GetPGame()->GetScene()->FindObjectByName("Player2_img"));
+
+		if (player1_nameText && player2_nameText) {
+			if (m_pLobby->CheckIsLobbyOwner(GetLocalSteamID())) {
+				player1_nameText->SetText(m_PlayersNames[m_PlayerIndex]);
+				player2_nameText->SetText(m_PlayersNames[!m_PlayerIndex]);
+			}
+			else {
+				player1_nameText->SetText(m_PlayersNames[!m_PlayerIndex]);
+				player2_nameText->SetText(m_PlayersNames[m_PlayerIndex]);
+			}
+		}
+		if (player1_avatar && player2_avatar) {
+			for (int i = 0; i < MAX_PLAYERS_PER_SERVER; ++i) {
+				if (!m_PlayerTextures[i]) {
+					m_PlayerTextures[i] = GetPlayerAvatar(SteamFriends()->GetLargeFriendAvatar(m_SteamIDPlayers[i]));
+				}
+			}
+
+			if (m_pLobby->CheckIsLobbyOwner(GetLocalSteamID())) {
+				if (m_PlayerTextures[m_PlayerIndex])
+					player1_avatar->SetTexture(m_PlayerTextures[m_PlayerIndex]);
+				if (m_PlayerTextures[!m_PlayerIndex])
+					player2_avatar->SetTexture(m_PlayerTextures[!m_PlayerIndex]);
+			}
+			else {
+				if (m_PlayerTextures[!m_PlayerIndex])
+					player1_avatar->SetTexture(m_PlayerTextures[!m_PlayerIndex]);
+				if (m_PlayerTextures[m_PlayerIndex])
+					player2_avatar->SetTexture(m_PlayerTextures[m_PlayerIndex]);
+			}
+		}
+
+		std::unordered_map<std::string, ButtonObject*> TableCells;
+		for (Object* obj : GetPGame()->GetScene()->GetSceneObjects()) {
+			std::string obj_name = obj->GetName();
+			if (obj_name.starts_with("Object_")) {
+				TableCells.insert({ obj_name, static_cast<ButtonObject*>(obj) });
+				if (m_GameData.m_PlayerTurnIndex == m_PlayerIndex && !m_GameData.m_RoundEnded) {
+					if (!static_cast<ButtonObject*>(obj)->GetClickable()) {
+						static_cast<ButtonObject*>(obj)->SetClickable(true);
+					}
+				}
+				else {
+					if (static_cast<ButtonObject*>(obj)->GetClickable()) {
+						static_cast<ButtonObject*>(obj)->SetClickable(false);
+					}
+				}
+			}
+		}
+
+		for (int i = 0; i < 9; ++i) {
+			std::string objAction = convertToTwoDigitIndex(i);
+			std::string objName = "Object_" + objAction;
+			TableCells[objName]->GetTextObject()->SetText(convertToTicTacUnit(m_GameData.m_TicTacTable[i]));
+		}
+
+		TextObject* GameTimer = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("GameTimer"));
+		if (GameTimer) {
+			GameTimer->SetText(to_string_with_precision(roundf(m_LocalGameTimer * 100) / 100));
+			if (m_LocalGameTimer < 5) {
+				D2D1::ColorF red(1,0,0,1);
+				GameTimer->SetColor(red);
+			}
+			else {
+				D2D1::ColorF black(0, 0, 0, 1);
+				GameTimer->SetColor(black);
+			}
+		}
+
+		m_LocalGameTimer -= (m_pGameEngine->GetGameTickCount() - m_DeltaTimeTicks) / 1000.0f;
+		m_DeltaTimeTicks = m_pGameEngine->GetGameTickCount();
+		if (m_LocalGameTimer <= 0.0f) {
+			m_LocalGameTimer = 0.0f;
+		}
+		if (abs(m_LocalGameTimer - m_GameData.m_GameTimer) > 1.5f) {
+			m_LocalGameTimer = m_GameData.m_GameTimer;
+		}
+
+		TextObject* RoundText = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("RoundText"));
+		if (RoundText) {
+			if (m_GameData.m_RoundEnded) {
+				if (m_GameData.m_RoundEnded != m_PrevGameData.m_RoundEnded)
+					m_LocalGameTimer = 5.0f;
+				if (m_GameData.m_WinPlayerIndex >= MAX_PLAYERS_PER_SERVER) {
+					RoundText->SetText("Draw!");
+				}
+				else
+					RoundText->SetText(m_PlayersNames[m_GameData.m_WinPlayerIndex] + " Won!");
+			}
+			else {
+				RoundText->SetText("");
+			}
+		}
+
+		TextObject* Player1_unit = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("Player1_unit"));
+		TextObject* Player2_unit = static_cast<TextObject*>(GetPGame()->GetScene()->FindObjectByName("Player2_unit"));
+		if (Player1_unit && Player2_unit) {
+			if (m_GameData.m_HostIsCrosses) {
+				Player1_unit->SetText("X");
+				Player2_unit->SetText("O");
+			}
+			else {
+				Player1_unit->SetText("O");
+				Player2_unit->SetText("X");
+			}
+		}
+
+		TextureObject* Player1_turn = static_cast<TextureObject*>(GetPGame()->GetScene()->FindObjectByName("Player1_turn"));
+		TextureObject* Player2_turn = static_cast<TextureObject*>(GetPGame()->GetScene()->FindObjectByName("Player2_turn"));
+		if (Player1_turn && Player2_turn) {
+			if (m_pLobby->CheckIsLobbyOwner(GetLocalSteamID())) {
+				if (m_GameData.m_PlayerTurnIndex == m_PlayerIndex) {
+					Player1_turn->SetActive(true);
+					Player2_turn->SetActive(false);
+				}
+				else {
+					Player1_turn->SetActive(false);
+					Player2_turn->SetActive(true);
+				}
+			}
+			else {
+				if (m_GameData.m_PlayerTurnIndex == m_PlayerIndex) {
+					Player1_turn->SetActive(false);
+					Player2_turn->SetActive(true);
+				}
+				else {
+					Player1_turn->SetActive(true);
+					Player2_turn->SetActive(false);
+				}
+			}
+		}
+
+		if (m_GameData.m_GameTimer > m_PrevGameData.m_GameTimer) {
+			m_LocalGameTimer = m_GameData.m_GameTimer;
+		}
+
+		memcpy(&m_PrevGameData, &m_GameData, sizeof(GameStateUpdateData_t));
 		for (uint32 i = 0; i < MAX_PLAYERS_PER_SERVER; ++i)
 		{
 			// TODO: game loop
 			/*if (m_Players[i])
 				m_Players[i]->Tick();*/
 		}
-		break;
-	case EClientGameState::ClientGameExiting:
+	}
+	else if (m_eGameState == EClientGameState::ClientGameExiting) {
 		DisconnectFromServer();
 		return;
-	default:
-		OutputDebugString("Unhandled game state in GameClient::Tick\n");
-
 	}
+	else {
+		OutputDebugString("Unhandled game state in GameClient::Tick\n");
+	}
+
+exit_state_check:
 
 	if (m_eConnectedStatus == k_EClientConnectedAndAuthenticated && m_Players[m_PlayerIndex])
 	{
@@ -635,8 +829,14 @@ void GameClient::Tick() {
 		// the networking system will not attempt retransmission, and our message may not arrive.
 		// That's OK, because we would rather just send a new, update message, instead of
 		// retransmitting the old one.
-		if (m_Players[m_PlayerIndex]->GetClientUpdateData(msg.AccessUpdateData()))
+		if (m_Players[m_PlayerIndex]->GetClientUpdateData(msg.AccessUpdateData())) {
+			msg.AccessUpdateData()->SetValid();
+			msg.AccessUpdateData()->SetMove(last_x, last_y);
+			SendServerData(&msg, sizeof(msg), k_nSteamNetworkingSend_Reliable);
+		}
+		else {
 			SendServerData(&msg, sizeof(msg), k_nSteamNetworkingSend_Unreliable);
+		}
 	}
 
 	if (m_pP2PAuthedGame)
@@ -802,6 +1002,11 @@ void GameClient::OnReceiveServerUpdate(ServerGameUpdateData_t* pUpdateData) {
 		else if (m_eGameState == EClientGameState::ClientGameExiting)
 			break;
 
+		if (m_eGameState != EClientGameState::ClientGameActive) {
+			for (int i = 0; i < MAX_PLAYERS_PER_SERVER; ++i) {
+				m_SteamIDPlayers[i] = CSteamID();
+			}
+		}
 		SetGameState(EClientGameState::ClientGameActive);
 		break;
 	case EServerGameState::ServerExiting:
@@ -857,6 +1062,7 @@ void GameClient::OnReceiveServerUpdate(ServerGameUpdateData_t* pUpdateData) {
 		}
 	}
 
+	pUpdateData->GetGameUpdateData(&m_GameData);
 	for (uint32 i = 0; i < MAX_PLAYERS_PER_SERVER; ++i)
 	{
 		m_SteamIDPlayers[i].SetFromUint64(pUpdateData->GetPlayerSteamID(i));
@@ -865,14 +1071,13 @@ void GameClient::OnReceiveServerUpdate(ServerGameUpdateData_t* pUpdateData) {
 			if (!m_Players[i]) {
 				ServerPlayerUpdateData_t* pPlayerData = pUpdateData->AccessPlayerUpdateData(i);
 				m_Players[i] = new GamePlayer(m_pGameEngine);
-				uint32_t x, y;
-				pPlayerData->GetMove(x, y);
-				m_Players[i]->SetMove(x, y);
+				//pPlayerData->GetMove(x, y);
+				//m_Players[i]->SetMove(x, y);
 				if (i == m_PlayerIndex) {
 					// Its local player
 				}
 			}
-
+			
 			if (i == m_PlayerIndex)
 				m_Players[i]->SetIsLocalPlayer(true);
 			else

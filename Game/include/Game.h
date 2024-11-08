@@ -34,6 +34,8 @@ private:
 	void Action_LobbyStart();
 	void Action_LobbyInvite();
 
+	void Action_GameCellClick(int index);
+
 	HWND m_hWnd;
 	GameEngine* m_pEngine = nullptr;
 	Scene* m_pScene = nullptr;

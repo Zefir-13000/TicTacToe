@@ -101,10 +101,16 @@ void Game::Action_LobbyReady() {
 
 void Game::Action_LobbyStart() {
 	OutputDebugString("Game starting...\n");
+	SteamMatchmaking()->SetLobbyData(m_pGameClient->GetLobbySteamID(), "game_starting", "1");
+	m_pGameClient->SetGameState(EClientGameState::ClientGameStartServer);
 }
 
 void Game::Action_LobbyInvite() {
 	SteamFriends()->ActivateGameOverlayInviteDialog(m_pGameClient->GetLobbySteamID());
+}
+
+void Game::Action_GameCellClick(int index) {
+	m_pGameClient->MakeMove(index);
 }
 
 void Game::SetupActions() {
@@ -114,12 +120,20 @@ void Game::SetupActions() {
 	auto lobby_ready_cb = std::bind(&Game::Action_LobbyReady, this);
 	auto lobby_start_cb = std::bind(&Game::Action_LobbyStart, this);
 	auto lobby_invite_cb = std::bind(&Game::Action_LobbyInvite, this);
+	
 	m_pScene->SetupActionCallback("MainMenu_StartGame", mainMenu_startGame_cb);
 	m_pScene->SetupActionCallback("MainMenu_ExitGame", mainMenu_exitGame_cb);
 	m_pScene->SetupActionCallback("Lobby_Back", lobby_back_cb);
 	m_pScene->SetupActionCallback("Lobby_Ready", lobby_ready_cb);
 	m_pScene->SetupActionCallback("Lobby_Start", lobby_start_cb);
 	m_pScene->SetupActionCallback("Lobby_Invite", lobby_invite_cb);
+
+	for (int i = 0; i < 9; ++i) {
+		std::string strIndex = convertToTwoDigitIndex(i);
+		std::string objAction = "Object" + strIndex;
+		auto game_cell_click_cb = std::bind(&Game::Action_GameCellClick, this, i);
+		m_pScene->SetupActionCallback(objAction, game_cell_click_cb);
+	}
 }
 
 void Game::RenderScene() {
